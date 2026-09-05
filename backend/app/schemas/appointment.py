@@ -12,6 +12,15 @@ class AppointmentCreate(BaseModel):
     buffer_minutes: int | None = Field(default=None, ge=0)
 
 
+class AppointmentReschedule(BaseModel):
+    # Hepsi opsiyonel (partial update). Sadece bunlar guncellenebilir -
+    # customer_id veya status bu endpoint'ten degistirilemez.
+    start_at: datetime | None = None
+    service_id: int | None = None
+    staff_id: int | None = None
+    buffer_minutes: int | None = Field(default=None, ge=0)
+
+
 class AppointmentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
