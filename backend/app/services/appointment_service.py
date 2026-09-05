@@ -13,6 +13,9 @@ from app.core.availability import (
 )
 from app.models import Appointment, AvailabilityRule, Customer, Service, StaffMember, Tenant
 
+# migration 0003_appointment_overlap_exclusion.py ile eklenen constraint adi.
+_OVERLAP_EXCLUSION_CONSTRAINT_NAME = "excl_appointments_staff_time_overlap"
+
 
 def _get_tenant(db: Session, tenant_id: int) -> Tenant:
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
@@ -159,13 +162,21 @@ def create_appointment(
     db.add(appointment)
     try:
         db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
+        db.rollback()
         # Uygulama seviyesindeki on-kontrolu (yukarida) es zamanli iki
         # istegin ikisi de gecebilir (biri commit etmeden diger okuma
         # yapabilir) - asil guvence excl_appointments_staff_time_overlap
         # constraint'idir (bkz. migration 0003). Buraya dusmek, on-kontrolun
         # yarisi kacirdigi ama DB'nin yakaladigi anlamina gelir.
-        db.rollback()
+        #
+        # Sadece BU constraint'in ihlalini 409'a ceviriyoruz - baska bir
+        # IntegrityError (ornegin beklenmedik bir kisitlama ihlali) burada
+        # yutulup yanlislikla "cakisma" olarak raporlanmasin diye oldugu
+        # gibi yeniden firlatilir (500 doner - beklenmeyen bir DB hatasi
+        # oldugunu dogru yansitir).
+        if _OVERLAP_EXCLUSION_CONSTRAINT_NAME not in str(exc.orig):
+            raise
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Time slot conflicts with an existing appointment (detected by database constraint)",
