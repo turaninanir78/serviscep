@@ -3,12 +3,15 @@ import os
 import psycopg
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 app = FastAPI()
 
+CORS_ALLOW_ORIGIN = os.environ.get("CORS_ALLOW_ORIGIN", "http://localhost:3000")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[CORS_ALLOW_ORIGIN],
     allow_methods=["GET"],
     allow_headers=["*"],
 )
@@ -27,4 +30,7 @@ def health():
     except Exception:
         db_ok = False
 
-    return {"status": "ok", "database": db_ok}
+    return JSONResponse(
+        status_code=200 if db_ok else 503,
+        content={"status": "ok" if db_ok else "error", "database": db_ok},
+    )
