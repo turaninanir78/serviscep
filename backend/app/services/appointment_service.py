@@ -77,7 +77,10 @@ def _booked_intervals_for_staff_day(
         )
         .all()
     )
-    return [BookedInterval(start_at=row.start_at, end_at=row.end_at) for row in rows]
+    return [
+        BookedInterval(start_at=row.start_at, end_at=row.end_at, buffer_minutes=row.buffer_minutes)
+        for row in rows
+    ]
 
 
 def get_available_slots(
@@ -105,11 +108,17 @@ def get_available_slots(
 
     booked = _booked_intervals_for_staff_day(db, tenant_id, staff_id, target_date, tz)
 
+    # Henuz olusturulmamis bir randevu icin buffer override bilinemez -
+    # bu yuzden hizmetin varsayilan buffer'i kullanilir. Gercek randevu
+    # olusturulurken bu deger override edilebilir (bkz. create_appointment);
+    # bu durumda musait gorunen bir slot, override sonrasi farkli bir
+    # cakisma durumuna yol acabilir - bu bilincli ve tutarli bir varsayimdir.
     return compute_available_slots(
         target_date=target_date,
         working_windows=working_windows,
         booked_intervals=booked,
         duration_minutes=service.duration_minutes,
+        buffer_minutes=service.default_buffer_minutes,
         timezone=tenant.timezone,
     )
 
@@ -121,6 +130,7 @@ def create_appointment(
     service_id: int,
     customer_id: int,
     start_at: datetime,
+    buffer_minutes: int | None = None,
 ) -> Appointment:
     tenant = _get_tenant(db, tenant_id)
     _get_staff_or_404(db, staff_id, tenant_id)
@@ -141,10 +151,20 @@ def create_appointment(
         start_at = start_at.astimezone(tz)
 
     end_at = start_at + timedelta(minutes=service.duration_minutes)
+    effective_buffer_minutes = (
+        buffer_minutes if buffer_minutes is not None else service.default_buffer_minutes
+    )
 
     booked = _booked_intervals_for_staff_day(db, tenant_id, staff_id, start_at.date(), tz)
     for interval in booked:
-        if has_conflict(start_at, end_at, interval.start_at, interval.end_at):
+        if has_conflict(
+            start_at,
+            end_at,
+            interval.start_at,
+            interval.end_at,
+            buffer_minutes=effective_buffer_minutes,
+            other_buffer_minutes=interval.buffer_minutes,
+        ):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Time slot conflicts with an existing appointment",
@@ -158,6 +178,7 @@ def create_appointment(
         start_at=start_at,
         end_at=end_at,
         created_via="dashboard",
+        buffer_minutes=effective_buffer_minutes,
     )
     db.add(appointment)
     try:

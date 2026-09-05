@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AppointmentCreate(BaseModel):
@@ -8,6 +8,8 @@ class AppointmentCreate(BaseModel):
     service_id: int
     customer_id: int
     start_at: datetime
+    # Gonderilmezse, hizmetin default_buffer_minutes degeri kullanilir.
+    buffer_minutes: int | None = Field(default=None, ge=0)
 
 
 class AppointmentOut(BaseModel):
@@ -22,6 +24,7 @@ class AppointmentOut(BaseModel):
     end_at: datetime
     status: str
     created_via: str
+    buffer_minutes: int
 
 
 class AvailableSlotsResponse(BaseModel):

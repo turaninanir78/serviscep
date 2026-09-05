@@ -76,6 +76,7 @@ class Service(Base):
     duration_minutes = Column(Integer, nullable=False)
     price = Column(Numeric(10, 2))
     is_active = Column(Boolean, nullable=False, server_default="true")
+    default_buffer_minutes = Column(Integer, nullable=False, server_default="0")
 
 
 class AvailabilityRule(Base):

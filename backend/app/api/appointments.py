@@ -23,6 +23,7 @@ def create_appointment_endpoint(
         service_id=payload.service_id,
         customer_id=payload.customer_id,
         start_at=payload.start_at,
+        buffer_minutes=payload.buffer_minutes,
     )
 
 

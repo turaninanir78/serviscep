@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ServiceCreate(BaseModel):
@@ -8,6 +8,7 @@ class ServiceCreate(BaseModel):
     duration_minutes: int
     price: Decimal | None = None
     is_active: bool = True
+    default_buffer_minutes: int = Field(default=0, ge=0)
 
 
 class ServiceUpdate(BaseModel):
@@ -15,6 +16,7 @@ class ServiceUpdate(BaseModel):
     duration_minutes: int | None = None
     price: Decimal | None = None
     is_active: bool | None = None
+    default_buffer_minutes: int | None = Field(default=None, ge=0)
 
 
 class ServiceOut(BaseModel):
@@ -26,3 +28,4 @@ class ServiceOut(BaseModel):
     duration_minutes: int
     price: Decimal | None
     is_active: bool
+    default_buffer_minutes: int
