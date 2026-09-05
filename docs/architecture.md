@@ -1,226 +1,334 @@
-# ServisCep — Teknik Mimari Önerisi
+# ServisCep — Teknik Mimari Dokümanı
 
-**Durum:** Taslak / Faz 0 (henüz kod yazılmadı)
-**Kapsam:** WhatsApp üzerinden randevu alan çok kiracılı (multi-tenant) SaaS
-**Geliştirici profili:** Tek kişi, Claude Code ile AI-destekli geliştirme, biçimsel yazılım mühendisliği geçmişi yok, VDS/cloud hedefi henüz seçilmedi.
-
----
-
-## 0. Tasarım İlkeleri
-
-Bu mimari üç kısıtı öncelikli tutuyor:
-
-1. **Solo + AI-assisted geliştirmeye uygunluk** — Claude Code'un bol örnek/dokümantasyona sahip olduğu, "sıradan" (boring/mainstream) teknolojiler tercih edildi. Egzotik veya az bilinen framework'ler, AI-assisted geliştirmede hata oranını artırır.
-2. **Faz 1'i şişirmeden Faz 2+'ya kapı bırakmak** — AI İş Hafızası, akıllı bekleme listesi ve platform entegrasyonu gibi ileri özellikler için veri modeli ve servis katmanları şimdiden esnek bırakılıyor, ama bu özellikler Faz 1'de **inşa edilmiyor**.
-3. **Yerelde çalışan her şeyin VDS'te aynen çalışması** — Docker Compose tabanlı, ortam farkı sadece `.env` ve domain/TLS ayarında olacak şekilde.
-
-Aşağıdaki her başlıkta seçim + gerekçe + reddedilen alternatif birlikte veriliyor.
+**Durum:** Faz 0 — planlama (henüz kod, migration veya Docker Compose oluşturulmadı)
+**Geliştirici profili:** Tek kişi, Claude Code ile AI-destekli geliştirme, biçimsel yazılım mühendisliği geçmişi yok.
 
 ---
 
-## 1. Frontend
+## 1. Proje Amacı
 
-**Seçim: Next.js (TypeScript) + Tailwind CSS + shadcn/ui**
+ServisCep, işletmelerin müşterilerinden **WhatsApp üzerinden** randevu almasını sağlayan, **çok kiracılı (multi-tenant)** bir SaaS platformudur.
 
-- İşletme paneli (randevu takvimi, hizmet/personel yönetimi, WhatsApp bağlantı durumu) klasik bir CRUD-ağırlıklı admin dashboard'u — shadcn/ui'nin hazır tablo/form/takvim bileşenleri bu işi hızlandırır.
-- Next.js hem pazarlama sitesini (serviscep.com) hem işletme panelini (app.serviscep.com) tek repo/tek deploy biriminde barındırabilir — solo geliştirmede ayrı repo yönetiminin getirdiği ek yük ortadan kalkar.
-- Claude Code'un Next.js/React ekosistemine dair eğitim verisi yoğunluğu, framework hatası riskini düşürür — bu senin mevcut Solana bot / CEX bot deneyimindeki Python tercihine paralel bir "az sürprizli teknoloji" mantığı.
-- Vercel'e bağımlı değil: `next build` çıktısı Docker container içinde `node server.js` ile VDS'te de sorunsuz çalışır (bkz. Bölüm 6).
-
-**Reddedilen alternatif:** SvelteKit — daha hafif ve performanslı olsa da, Claude Code için örnek yoğunluğu ve ekosistem desteği Next.js kadar güçlü değil; solo/AI-assisted geliştirmede bu risk performans kazancına değmiyor.
-
-**Not:** Faz 1'de müşteri tarafında ayrı bir web arayüzü **yok** — müşteri deneyimi tamamen WhatsApp içinde. İleride "linkle randevu al" gibi bir fallback gerekirse aynı Next.js app içinde `/book/[tenant]` route'u olarak eklenir, ayrı bir proje gerekmez.
+Uzun vadede modüler bir yapı hedefleniyor — klasik (AI'sız) randevu, AI destekli esnek randevu, akıllı bekleme listesi, AI İş Hafızası ve ServisCep hizmet platformu entegrasyonu gibi özellikler zamanla birbirinden bağımsız modüller olarak eklenecek. Bu doküman, bu uzun vadeli hedefe giden yolda **ilk çalışan ürünün (Faz 1) ne olduğunu ve mimarinin buna nasıl hizmet ettiğini** tanımlar.
 
 ---
 
-## 2. Backend
+## 2. Faz 1 Kapsamı
 
-**Seçim: Python + FastAPI**
+İlk çalışan ürün, WhatsApp'a hiç dokunmadan, **API üzerinden uçtan uca test edilebilir bir randevu motoru**dur. Kapsam:
 
-Gerekçe, framework kalitesinden çok **senin mevcut bağlamınla tutarlılık** üzerinden:
+1. Firma / tenant oluşturma
+2. Kullanıcı / yönetici oluşturma
+3. Personel oluşturma
+4. Hizmet oluşturma
+5. Çalışma saatlerini belirleme
+6. Müşteri oluşturma
+7. Boş randevu saatlerini hesaplama
+8. Randevu oluşturma
+9. Randevu çakışmasını engelleme
+10. Randevuları yönetim panelinde gösterme
 
-- Solana bot ve CEX bot'ta zaten Python'da derin pratik birikimin var (async iş, servis katmanları, scoring/karar mantığı ayrıştırma) — aynı dili kullanmak, Claude Code ile üretilen kodu okuyup denetleme kapasiteni doğrudan artırır.
-- ChainLens için zaten planladığın "FastAPI backend → JSON endpoint" deseniyle bu proje aynı iskelete oturuyor; ileride iki proje arasında kod/](ör. Stage-1 tarzı filtre mantığı, AI karar-katmanı desenleri) paylaşımı mümkün olur.
-- AI İş Hafızası (Bölüm 9) ve AI-destekli esnek randevu paketi geldiğinde ihtiyaç duyacağın embedding/LLM orkestrasyon kütüphanelerinin (LangChain, LlamaIndex, doğrudan Anthropic/OpenAI SDK'ları) en olgun ekosistemi Python'da.
-- FastAPI'nin native `async def` desteği, WhatsApp webhook'unun Meta'nın kısa timeout penceresine hızlı yanıt verip işlemi arkaya devretmesi için doğrudan uygun (Bölüm 8).
+WhatsApp entegrasyonu **sonraki aşamada**, bu API'ler zaten çalışır ve test edilmiş durumdayken devreye girer. Randevu motorunun doğruluğu WhatsApp'a bağımlı olmadan kanıtlanmalı — sıra önemli: önce motor, sonra kanal.
 
-**Reddedilen alternatif:** Node.js/NestJS — frontend ile aynı dil olması (TypeScript full-stack) cazip, ama (a) senin var olan Python birikimini kullanmıyor, (b) gelecekteki AI-ağırlıklı fazlarda ekosistem avantajı FastAPI'de. Tek-dil rahatlığı, bu projede ikinci öncelik.
-
-**İç yapı (Faz 1 iskeleti, kod değil — sadece katmanlama fikri):**
-- `api/` — HTTP route'lar (dashboard REST API + WhatsApp webhook)
-- `core/` — randevu çakışma kontrolü, çalışma saati mantığı, tenant scoping (saf iş mantığı, framework'ten bağımsız)
-- `integrations/` — WhatsApp Cloud API client, n8n webhook çağrıları
-- `ai/` — Faz 1'de kural-tabanlı basit niyet ayrıştırma; Faz 2'de AI İş Hafızası bu klasöre girer (bkz. Bölüm 9 — bu ayrım CEX bot'taki mekanik/AI karar katmanı ayrımıyla birebir aynı desen)
+Faz 1'de aktif olan tek özellik modülü: **`classic_appointments`** (bkz. Bölüm 7).
 
 ---
 
-## 3. PostgreSQL Veri Modeli
+## 3. Faz 1 Dışında Kalan Özellikler
 
-Ana tablolar (Faz 1 kapsamı, isimler taslak):
+Mimari bunlara **gelecekte** yer açacak şekilde tasarlanıyor, ama Faz 1 implementasyonuna zorunlu olarak eklenmiyor:
+
+- pgvector / embedding altyapısı
+- Gerçek AI implementasyonu (niyet ayrıştırma, doğal dil anlama)
+- AI İş Hafızası sistemi
+- Redis
+- RQ / Celery veya başka bir background worker
+- Karmaşık subscription / faturalama sistemi
+- Gerçek ödeme sistemi entegrasyonu
+- Akıllı bekleme listesi implementasyonu
+- Meta Embedded Signup otomasyonu
+- Fazla karmaşık RLS kuralları
+
+Bunların hiçbiri "yanlış fikir" oldukları için dışarıda değil — Faz 1'in tek işi randevu motorunun doğru çalıştığını kanıtlamak, bu listedekiler henüz doğrulanmamış problemler için erken karmaşıklık olur.
+
+---
+
+## 4. Genel Sistem Mimarisi
+
+Faz 1'de veri akışı WhatsApp'sız, doğrudan API üzerinden:
+
+```
+Yönetim Paneli (Next.js)
+        ↓
+   FastAPI Backend  ←→  PostgreSQL
+```
+
+WhatsApp devreye girdiğinde (Faz 1 sonrası) akış şu şekilde genişler, ama **backend'in iş mantığı katmanı değişmez**:
+
+```
+WhatsApp mesajı
+   → Meta webhook
+   → FastAPI (webhook alım noktası)
+   → Backend iş mantığı (randevu motoru)
+   → PostgreSQL
+   → Sonuç
+   → n8n (bildirim/otomasyon tetikleme — opsiyonel yan etki)
+   → WhatsApp cevabı
+```
+
+n8n bu akışta **çekirdek karar noktası değil**, yan etkileri yürüten bir istasyon (bkz. Bölüm 9). Randevu motoru n8n'e bağımlı değildir; n8n tamamen devre dışı bırakılsa bile randevu oluşturma/çakışma kontrolü çalışmaya devam eder.
+
+---
+
+## 5. Teknoloji Seçimi
+
+| Katman | Seçim |
+|---|---|
+| Frontend | Next.js + TypeScript |
+| Backend | Python + FastAPI |
+| Veritabanı | PostgreSQL |
+| WhatsApp | Meta Cloud API |
+| Otomasyon | n8n |
+| Local geliştirme | Docker |
+| Production | VDS / Cloud |
+| AI | Sonradan eklenecek, ayrı modül |
+
+Bu seçimler önceki mimari değerlendirmesinde belirlenmiş ve korunuyor: Next.js Claude Code ile geliştirmede örnek/dokümantasyon yoğunluğu nedeniyle, FastAPI mevcut Python (Solana bot / CEX bot) birikimiyle tutarlılık ve AI fazlarındaki ekosistem olgunluğu nedeniyle tercih edildi. Bu dokümanın odağı teknoloji seçimini yeniden tartışmak değil, Faz 1 kapsamını ve modüler yapıyı netleştirmek.
+
+---
+
+## 6. Multi-Tenant Yaklaşımı
+
+**Temel prensip: her işletme yalnızca kendi verisini görebilir.**
+
+- Tek veritabanı, tek şema, her tabloda `tenant_id` — tenant başına ayrı şema/veritabanı Faz 1'de gereksiz operasyonel yük getirir.
+- İzolasyon **öncelikle uygulama katmanında** sağlanır: her sorgu, backend'de "current tenant" bağlamı üzerinden `tenant_id` ile filtrelenir.
+- Faz 1'de Postgres RLS politikaları **eklenmiyor** — uygulama katmanındaki tenant scoping'in doğru ve tutarlı çalıştığı test edildikten sonra, ikinci savunma katmanı olarak sonraki fazda değerlendirilecek bir konu. Faz 1'i "hem uygulama hem veritabanı seviyesinde çift kilit" ile başlatmak, henüz tek bir tenant'ın bile üretimde çalışmadığı bir aşamada gereksiz karmaşıklık.
+
+---
+
+## 7. Modüler Özellik / `tenant_features` Yaklaşımı
+
+Sistem uzun vadede modüler olacağı için `tenants` tablosunda tek bir `plan_type` alanı yeterli değil — bir firma birden fazla özelliğe aynı anda sahip olabilmeli.
+
+```
+tenant
+  ↓
+tenant_features
+```
+
+Örnek özellik anahtarları (feature flag mantığıyla):
+
+- `classic_appointments`
+- `ai_flexible_appointments`
+- `smart_waitlist`
+- `ai_business_memory`
+- `serviscep_integration`
+
+Örnek durum:
+
+```
+Firma A: classic_appointments
+Firma B: classic_appointments, ai_flexible_appointments
+Firma C: ai_business_memory
+```
+
+**Faz 1'de tüm tenant'lar için sadece `classic_appointments` aktif olur.** Diğer özellik anahtarları şemada tanımlı olabilir ama hiçbir tenant'a atanmaz ve hiçbir kod yolu bunları kullanmaz. Bu yaklaşımın maliyeti bir tablo + basit bir ilişki; getirisi, ileride "AI paketi olan firmalar" gibi bir ayrım geldiğinde `plan_type` alanını yeniden modellemek yerine sadece yeni bir `tenant_features` satırı eklemek olması.
+
+---
+
+## 8. Randevu Motoru Sorumlulukları
+
+Aşağıdakiler **kesinlikle FastAPI backend içinde** kalır, hiçbir dış sistem (n8n dahil) bu mantığı yönetmez:
+
+- Randevu oluşturma
+- Müsaitlik hesaplama (çalışma saatleri − mevcut randevular = boş slotlar)
+- Randevu çakışma kontrolü
+- Çalışma saatleri yönetimi
+- Personel uygunluğu
+- Tenant izolasyonu
+- Veritabanı işlemleri (transactional bütünlük)
+
+**Klasik randevu mantığı örneği (AI kullanılmadan):**
+
+```
+Firma çalışma saatleri: 09:00 - 18:00
+Randevu süresi: 60 dakika
+
+Sistem hesaplar: 09:00, 10:00, 11:00, 12:00, ...
+```
+
+Bu hesaplama saf iş mantığıdır — framework'ten, WhatsApp'tan ve n8n'den bağımsız, doğrudan test edilebilir bir fonksiyon/servis olarak yazılır. Faz 1'in "bitti" sayılması için ölçüt: bu mantığın WhatsApp hiç devrede olmadan, sadece API çağrılarıyla uçtan uca doğrulanmış olması.
+
+---
+
+## 9. n8n'in Sistemdeki Rolü
+
+**n8n çekirdek uygulama mantığını yönetmez — sadece otomasyon ve entegrasyon katmanıdır.**
+
+n8n'e uygun olanlar (yan etkiler):
+- Randevu öncesi hatırlatma mesajı
+- No-show sonrası takip mesajı
+- Randevu sonrası değerlendirme isteği
+- Google Calendar senkronizasyonu gibi ileride eklenecek entegrasyonlar
+
+n8n'e **verilmeyecek** olanlar: Bölüm 8'deki tüm maddeler. Gerekçe: bu işlemler transactional ve tenant-izolasyonu açısından kritik; mantığın bir kısmı n8n workflow'una, bir kısmı backend'e dağılırsa çok kiracılı bir sistemde hata ayıklamak (özellikle solo geliştirici için) orantısız zorlaşır.
+
+Bağlantı yönü: backend, önemli olaylarda (`appointment.created` gibi) n8n'e HTTP ile bilgi verir; n8n bunun üzerine otomasyonu tetikler. Randevu motoru n8n olmadan da tam çalışır durumda olmalı — n8n'in devre dışı kalması (Faz 1'de henüz kurulmamış olması dahil) randevu oluşturmayı etkilememeli.
+
+Faz 1'de WhatsApp henüz devrede olmadığı için **n8n'in Faz 1'de fiilen bir işlevi yok** — kurulumu ve entegrasyonu WhatsApp aşamasıyla birlikte gelir.
+
+---
+
+## 10. WhatsApp Entegrasyon Mimarisi
+
+**Faz 1'de implement edilmiyor** — bu bölüm, veri modelinin ve mimarinin gelecekte bunu desteklemeye hazır olması için tutuluyor.
+
+- Bir tenant'ın WhatsApp hesabı **olabilir** (zorunlu değil — Faz 1'de hiçbir tenant'ın WhatsApp bağlantısı yok).
+- `phone_number_id` saklanabilecek şekilde şemada yer ayrılır.
+- WhatsApp Business Account (WABA) bağlantısı ileride desteklenir.
+- İlk prototipte (WhatsApp devreye girdiğinde) bağlantı **manuel** kurulur — her tenant kendi Meta hesabını kurar, `phone_number_id` ve erişim bilgilerini panelden girer.
+- **Meta Embedded Signup şu anda implement edilmiyor** — tenant sayısı arttığında ayrı bir iş kalemi olarak ele alınacak.
+- Access token ve benzeri hassas bilgiler, açık metin olarak değil, güvenli saklama prensibine uygun şekilde tasarlanacak (şifreleme yöntemi implementasyon aşamasında netleşir — Faz 1'de karar verilmesi gerekmiyor, çünkü henüz hiçbir token saklanmıyor).
+
+---
+
+## 11. Gelecekte AI Entegrasyonu
+
+AI, ayrı bir modül olarak (`ai_flexible_appointments` özellik anahtarı üzerinden, bkz. Bölüm 7) ileride eklenecek. Örnek akış:
+
+```
+Müşteri: "Yarın öğleden sonra gelebilir miyim?"
+AI: tarihi ve zaman aralığını anlar
+    → backend randevu motoruna (Bölüm 8) sorgu gönderir
+    → uygun seçenekleri müşteriye sunar
+```
+
+Kritik nokta: AI, randevu motorunun **üzerine** konumlanan bir katmandır — kendi çakışma kontrolü veya müsaitlik hesabı yapmaz, mevcut backend API'lerini çağırır. Bu sayede AI modülü eklendiğinde randevu motorunun kendisi değişmez, sadece yeni bir giriş noktası (doğal dil → API çağrısı) eklenmiş olur.
+
+**Faz 1'de AI kodu yazılmıyor.** Bu bölümün tek amacı, ileride bu modülün eklenmesinin randevu motorunda bir yeniden yazım gerektirmeyeceğini mimari olarak garanti altına almak.
+
+---
+
+## 12. Database Genel Yapısı
+
+Faz 1 için değerlendirilen temel tablolar:
 
 ```
 tenants
-  id, name, whatsapp_phone_number_id (unique), whatsapp_waba_id,
-  plan_type (classic|ai_flex), timezone, created_at
-
-users                -- işletme paneline giriş yapan kişiler
-  id, tenant_id, email, password_hash, role (owner|staff), created_at
-
-customers             -- işletmenin kendi müşterileri (WhatsApp üzerinden gelen)
-  id, tenant_id, whatsapp_number, display_name, first_seen_at
-
-services               -- işletmenin sunduğu hizmet tipleri
-  id, tenant_id, name, duration_minutes, price, is_active
-
-staff_members          -- randevuyu fiilen veren kişi (owner ile aynı olabilir)
-  id, tenant_id, name, is_active
-
-availability_rules     -- çalışma saatleri / müsaitlik
-  id, tenant_id, staff_id, weekday, start_time, end_time
-
+users              -- işletme paneline giriş yapan kişiler
+tenant_features    -- tenant ↔ özellik anahtarı ilişkisi (Bölüm 7)
+customers          -- işletmenin kendi müşterileri
+staff_members
+services
+availability_rules -- çalışma saatleri
 appointments
-  id, tenant_id, customer_id, service_id, staff_id,
-  start_at, end_at, status (pending|confirmed|cancelled|completed|no_show),
-  created_via (whatsapp|dashboard), created_at
-
-conversations           -- WhatsApp mesaj geçmişi (ham log)
-  id, tenant_id, customer_id, direction (in|out), message_text,
-  wa_message_id, created_at
-
-waitlist_entries        -- Faz 2: akıllı bekleme listesi (şimdiden şemada yer ayır)
-  id, tenant_id, customer_id, desired_service_id, desired_window_start,
-  desired_window_end, status
-
-business_memory_notes   -- Faz 2: AI İş Hafızası (şimdiden şemada yer ayır)
-  id, tenant_id, customer_id (nullable), content, embedding (vector), created_at
-
-subscriptions
-  id, tenant_id, plan_type, status, started_at, renewed_at
 ```
 
-**Neden `conversations` Faz 1'den itibaren var:** AI İş Hafızası'nın "hammaddesi" geçmiş WhatsApp yazışmalarıdır. Bunu Faz 1'de loglamazsan, Faz 2'ye geçtiğinde geriye dönük veri kaybetmiş olursun — bu tablo maliyeti neredeyse sıfır, sonradan eklenmesi ise veri kaybı demek.
+Aşağıdaki tablolar Faz 1'e dahil edilmiyor, sonraki fazlara bırakılıyor:
 
-**pgvector uzantısı:** Faz 1'de kullanılmasa bile Postgres imajına `pgvector` eklenmesi öneriliyor (bkz. Bölüm 6, Docker imajı). Uzantıyı sonradan eklemek kolay ama migration sürprizlerini şimdiden ortadan kaldırmak neredeyse maliyetsiz.
+- `conversations` / `messages` (WhatsApp mesaj geçmişi — WhatsApp entegrasyonuyla birlikte gelir)
+- `waitlist` (akıllı bekleme listesi)
+- `business_memory_notes` / `ai_memory`
+- `subscriptions` (gerçek faturalama sistemiyle birlikte gelir)
 
----
-
-## 4. Multi-Tenant Mimari
-
-**Seçim: Tek veritabanı, tek şema, her tabloda `tenant_id` + Postgres Row-Level Security (RLS)**
-
-- **Schema-per-tenant** veya **database-per-tenant** modelleri, tenant sayısı arttıkça migration/backup/monitoring karmaşıklığını katlayarak büyütür — solo bir geliştirici için bu, ölçeklenmeden önce operasyonel yük olarak ölçeklenir. ServisCep'in beklenen tenant sayısı (onlarca–yüzlerce işletme, milyonlarca değil) paylaşımlı şema modelini fazlasıyla destekler.
-- **Uygulama katmanında tenant scoping birincil savunma:** Her sorgu ORM/query katmanında `tenant_id` filtresiyle geçer (ör. FastAPI dependency injection ile "current_tenant" context'i her request'e enjekte edilir).
-- **Postgres RLS ikincil savunma hattı olarak aktif edilir:** Uygulama kodunda bir yerde tenant filtresi unutulsa bile veritabanı seviyesinde çapraz-tenant veri sızıntısını engeller. Solo geliştirmede insan hatası riski daha yüksek olduğundan bu ikinci katman önemli.
-
-**Tenant çözümleme (tenant resolution) iki farklı kanaldan gelir:**
-1. **Dashboard girişi:** Kullanıcı login olur → `users.tenant_id` üzerinden otomatik belirlenir. Faz 1'de subdomain (`isletme.serviscep.com`) gerekmez, gereksiz karmaşıklık; login + tek tenant context yeterli.
-2. **WhatsApp webhook'u:** Gelen mesajın Meta payload'ındaki `phone_number_id` alanı, `tenants.whatsapp_phone_number_id` ile eşleştirilerek tenant bulunur (bkz. Bölüm 8).
+Multi-tenant izolasyonu (Bölüm 6) tüm tablolarda temel prensip, ama Faz 1'de bu sadece `tenant_id` kolonu + uygulama katmanı filtresi olarak uygulanıyor — RLS gibi ek katmanlar eklenmiyor.
 
 ---
 
-## 5. Authentication
+## 13. API Sınırları
 
-**Seçim: Kendi barındırdığın JWT tabanlı auth (FastAPI + `passlib` + access/refresh token, refresh token httpOnly cookie'de)**
+Backend, Faz 1'de iki tür tüketiciye hizmet verir:
 
-- Auth0/Clerk gibi yönetilen servisler hız kazandırır ama (a) aylık maliyet ekler, (b) VDS'e tam geçiş hedefiyle kısmen çelişir — kullanıcı kimlik verisi üçüncü parti servise bağımlı kalır. Erken aşama bir SaaS için bu bağımlılığı şimdiden almak gerekmiyor.
-- Kapsam sınırlı: sadece işletme paneli girişi (email+şifre) ve rol bazlı yetkilendirme (owner/staff, ileride ServisCep iç ekibi için super-admin). Bu kapsamda özel auth yazmak, Claude Code ile birkaç saatlik iş — dışarıdan servise ihtiyaç doğuracak kadar karmaşık değil.
-- Müşteri (WhatsApp kullanıcısı) için ayrı bir auth **yok** — kimlik doğrulama WhatsApp numarası üzerinden zaten doğal olarak sağlanıyor.
+- **Yönetim paneli (Next.js):** Firma/kullanıcı/personel/hizmet/çalışma saati yönetimi, randevu oluşturma/görüntüleme — kimlik doğrulamalı (giriş yapmış kullanıcı).
+- **Doğrudan API testleri:** Faz 1'in doğrulanma yöntemi budur — WhatsApp veya panel olmadan, API çağrılarıyla randevu motorunun uçtan uca doğru çalıştığı gösterilir.
 
-**Reddedilen alternatif:** Supabase (Auth + Postgres + Storage hepsi bir arada) — cazip bir hızlandırıcı, ama VDS'e geçiş planınla (Bölüm 10) gerilir; Supabase'in yönetilen Postgres'i kendi VDS'indeki Postgres ile aynı şey değil, ileride migration gerektirir. Şimdiden kendi Postgres'ini kendin işletmek, uzun vadede tekrar taşınma riskini ortadan kaldırıyor.
+WhatsApp webhook endpoint'i bu fazda **yok** — Bölüm 10'da tarif edilen entegrasyon geldiğinde ayrı bir giriş noktası olarak eklenecek, mevcut API'leri değiştirmeyecek.
 
----
-
-## 6. Docker Yapısı
-
-Tek `docker-compose.yml`, hem yerelde hem VDS'te aynı:
+Backend içi klasörleme sınırı netleştirilir:
 
 ```
-services:
-  postgres      # pgvector/pgvector:pg16 imajı (pgvector şimdiden hazır)
-  backend       # FastAPI + uvicorn
-  frontend      # Next.js (production build, node server)
-  n8n           # resmi n8nio/n8n imajı
-  redis         # webhook arkası kuyruk + basit cache + rate limit
-  caddy         # reverse proxy + otomatik TLS (Let's Encrypt)
+backend/
+├── app/
+│   ├── api/        -- HTTP route'lar (panel API'si; Faz 1'de WhatsApp yok)
+│   ├── core/        -- çakışma kontrolü, müsaitlik hesabı, tenant scoping (saf iş mantığı)
+│   ├── models/      -- veritabanı modelleri
+│   ├── schemas/      -- request/response şemaları
+│   ├── services/     -- iş mantığı orkestrasyonu (api katmanı ile core arasında)
+│   └── main.py
+├── tests/
+└── requirements.txt veya pyproject.toml
 ```
 
-- **Redis'in eklenme gerekçesi:** WhatsApp webhook'u Meta'ya hızlı 200 OK dönmeli; asıl işlem (niyet ayrıştırma, DB yazımı, n8n tetikleme) arka planda kuyruğa alınmalı. FastAPI `BackgroundTasks` Faz 1 için yeterli olabilir, ama Redis + basit bir worker (RQ) şimdiden compose'da bulunması, mesaj hacmi arttığında kod değişikliği değil sadece worker sayısı artırma sorunu haline getirir.
-- **Caddy tercih edildi (Nginx yerine):** Otomatik Let's Encrypt sertifika yenilemesi tek satır config ile geliyor — solo geliştiricinin manuel certbot cron'u yönetmesine gerek kalmıyor.
-- **Yerel/VDS farkı sadece `.env`'de:** `DATABASE_URL`, `WHATSAPP_ACCESS_TOKEN`, `DOMAIN` gibi değişkenler değişir; compose dosyasının kendisi değişmez. Bu, "yerelde çalışıyor ama sunucuda çalışmıyor" sınıfı sorunları yapısal olarak engeller.
+`core/` katmanının framework'ten (FastAPI'den) bağımsız, saf Python fonksiyonları olarak yazılması — bu, Bölüm 8'deki "randevu motoru API'den, panelden, ileride WhatsApp'tan ve AI'dan aynı şekilde çağrılabilmeli" gerekliliğinin doğrudan karşılığı.
 
 ---
 
-## 7. n8n Entegrasyonu
+## 14. Frontend Sorumlulukları
 
-**Rolü net sınırlandırılmalı: n8n çekirdek randevu mantığını içermez, sadece yan-etki otomasyonlarını yürütür.**
+Next.js uygulaması Faz 1'de sadece **yönetim paneli**dir:
 
-- **Backend'de kalması gereken (n8n'e devredilmeyecek):** Randevu çakışma kontrolü, müsaitlik hesaplama, tenant-scoping, veri bütünlüğü — bunlar transactional ve tenant-izolasyonu kritik işlemler; n8n workflow'u içinde dağınık iş mantığı, çoklu tenant'ta hata ayıklamayı (debugging) çok zorlaştırır.
-- **n8n'e uygun olanlar:** Randevu öncesi hatırlatma mesajı gönderme, no-show sonrası takip mesajı, randevu sonrası değerlendirme isteği, Google Calendar senkronizasyonu, plan bazlı otomasyon kuralları (ör. AI paketindeki ekstra bildirimler).
-- **Bağlantı yönü:** Backend, önemli olaylarda (`appointment.created`, `appointment.completed` vb.) n8n'in webhook node'una HTTP POST atar. n8n, gerektiğinde backend'in iç API'sine geri çağrı yapabilir (ör. "bu müşteriye özel not var mı?"). WhatsApp mesajlarının **birincil alım noktası backend'dir**, n8n değil — çünkü webhook güvenilirliği ve DB yazım garantisi backend'de daha kolay denetlenir.
+- Firma/tenant bilgisi ve ayarları
+- Kullanıcı/personel yönetimi
+- Hizmet tanımlama
+- Çalışma saatleri girişi
+- Müşteri listesi
+- Randevu takvimi (görüntüleme + oluşturma)
 
----
+Frontend'de **iş mantığı çalışmaz** — çakışma kontrolü, müsaitlik hesabı gibi işlemler backend API'sinden gelen sonuçları gösterir, kendi başına hesaplama yapmaz. Bu ayrım, ileride WhatsApp veya AI gibi başka bir "istemci" eklendiğinde panelin özel bir konumu olmamasını sağlar — hepsi aynı backend API'sini kullanır.
 
-## 8. WhatsApp Meta Cloud API Entegrasyonu
-
-Bu bölüm en kritik mimari karar noktası, çünkü multi-tenant + WhatsApp kombinasyonu tek numaralı bir bot'tan farklı kurallar getiriyor.
-
-**Model: Her tenant'ın kendi WhatsApp Business numarası olur (paylaşımlı tek numara değil).**
-
-Gerekçe: "İşletmelerin müşterilerinden randevu alması" senaryosunda müşteri, kendi gittiği işletmenin WhatsApp'ına yazıyor olmalı — paylaşımlı tek bir ServisCep numarası, her işletme için markasızlaşma ve müşteri kafa karışıklığı yaratır.
-
-**Faz 1 onboarding (manuel, otomatikleştirilmemiş):**
-- Her yeni tenant, kendi Meta Business Manager + WhatsApp Business Account (WABA) hesabını kurar, telefon numarasını Cloud API'ye bağlar, `phone_number_id` ve access token'ı ServisCep'e (dashboard üzerinden) girer.
-- Bu süreç ilk birkaç pilot müşteri için elle yürütülebilir; otomasyon (Embedded Signup + Meta Tech Provider/Solution Partner statüsü) ciddi bir onboarding sürtünmesi problemi haline geldiğinde (tenant sayısı arttıkça) ayrı bir iş kalemi olarak ele alınmalı. Faz 1'de bunu inşa etmek, henüz doğrulanmamış bir problem için erken optimizasyon olur.
-
-**Webhook mimarisi:**
-- Meta, uygulama başına **tek** webhook URL'i kabul eder (tenant başına değil) — bu yüzden tüm tenant'ların mesajları aynı `/webhooks/whatsapp` endpoint'ine düşer.
-- Gelen her payload'daki `phone_number_id` alanı, `tenants.whatsapp_phone_number_id` ile eşleştirilerek doğru tenant bulunur (bkz. Bölüm 4).
-- Endpoint, Meta'nın kısa timeout'u nedeniyle **hemen 200 OK döner**, gerçek işleme (niyet ayrıştırma, DB yazımı, n8n tetikleme) Redis kuyruğuna devredilir (bkz. Bölüm 6).
+Faz 1'de müşteri tarafında ayrı bir arayüz yoktur.
 
 ---
 
-## 9. AI İş Hafızası — Gelecekte Eklenebilirlik
+## 15. Local Docker Geliştirme Ortamı
 
-Faz 1'de **inşa edilmiyor**, ama şu üç tasarım kararı şimdiden alınırsa Faz 2'de şema/mimari değişikliği gerekmez:
+Faz 1'de Docker Compose dosyası **henüz oluşturulmuyor** (bu doküman kapsamı sadece mimari kararlar). İleride kurulacağında minimum servis seti:
 
-1. **`conversations` tablosu Faz 1'den itibaren tüm WhatsApp yazışmalarını ham metin olarak saklar** (Bölüm 3) — AI İş Hafızası'nın eğitim/bağlam verisi budur; sonradan eklenirse geçmiş veri kaybolur.
-2. **`pgvector` uzantısı Postgres imajında Faz 1'den itibaren hazır** (Bölüm 3, 6) — kullanılmasa bile varlığı, ileride embedding tablosu eklerken migration riski taşımaz.
-3. **`ai/` katmanı (Bölüm 2) Faz 1'de basit kural-tabanlı niyet ayrıştırma yapar, ama arayüzü ("bu mesaj bir randevu talebi mi", "hangi hizmet isteniyor") sabit tutulur.** Faz 2'de bu arayüzün arkasına AI İş Hafızası destekli daha akıllı bir implementasyon konur; webhook katmanı veya veri modeli değişmez. Bu, CEX bot'ta mekanik skor ile AI karar katmanını ayırdığın desenle birebir aynı mantık — ve orada işe yaradığı zaten kanıtlandı.
+```
+postgres
+backend   (FastAPI)
+frontend  (Next.js)
+```
 
----
-
-## 10. Yerel Geliştirmeden VDS/Cloud'a Geçiş
-
-**VDS önerisi: Hetzner Cloud, Avrupa lokasyonu (Almanya/Finlandiya), CX-serisi**
-
-Gerekçe:
-- Fiyat/performans oranı bootstrapped solo SaaS için GCP/AWS'e göre belirgin şekilde daha iyi — CEX bot'taki GCP VM deneyimin bir trading bot için mantıklıydı (tek kullanıcı, tek amaç), ama burada müşteri verisi barındıran çok kiracılı bir SaaS için maliyet ölçeklenebilirliği daha kritik.
-- Avrupa lokasyonu, Türkiye pazarına yönelik bir üründe müşteri verisinin (randevu, telefon numarası, yazışma) KVKK'ya benzer AB veri koruma standartlarına tabi bir bölgede durması açısından ek bir güven unsuru — bu bir zorunluluk değil ama düşük maliyetli bir artı.
-- GCP, mevcut deneyimin nedeniyle bir yedek seçenek olarak akılda tutulabilir, ama bu proje için ilk tercih değil.
-
-**Geçiş mekanizması:**
-- Yerel geliştirme ortamı = `docker-compose.yml` (Bölüm 6) ile birebir aynı servis seti.
-- VDS'e ilk kurulum: Docker + Docker Compose kurulumu, repo `git clone`, `.env.production` doldurulması, `docker compose up -d --build`.
-- Kod güncellemesi iş akışı (senin scp/ssh alışkanlığınla uyumlu, ekstra CI/CD karmaşıklığı olmadan): VDS'e SSH → `git pull` → `docker compose up -d --build`. GitHub Actions tabanlı otomatik deploy, tenant sayısı ve deploy sıklığı arttığında değerlendirilecek bir sonraki adım — Faz 1'de gereksiz karmaşıklık.
-- **Yedekleme (Faz 1'den itibaren zorunlu, trading bot'tan farklı olarak burada gerçek müşteri verisi var):** Günlük `pg_dump` cron job'u, Backblaze B2 veya S3-uyumlu bir depoya offsite yedek. Bu, CEX bot'ta olmayan ama SaaS için gözden kaçırılmaması gereken bir kalemdir.
-- **VM reboot sonrası otomatik ayağa kalkma:** CEX bot'ta sonradan fark edilip kapatılan bir boşluktu (systemd service eklenerek çözüldü) — burada `docker compose` servisleri `restart: always` politikasıyla tanımlanarak bu sorun Faz 1'den itibaren baştan kapatılıyor.
+n8n, Faz 1'de fiilen kullanılmadığı için (Bölüm 9) local ortamda zorunlu değil; WhatsApp entegrasyonu başladığında eklenir. Redis ve benzeri kuyruk altyapısı da aynı şekilde, gerçek bir ihtiyaç (webhook arkası asenkron işlem) doğduğunda eklenir — Faz 1'de sentetik olarak eklenmez.
 
 ---
 
-## Özet Tablo
+## 16. Production / VDS Geçiş Planı
 
-| Katman | Seçim | Ana Gerekçe |
-|---|---|---|
-| Frontend | Next.js + TS + shadcn/ui | Claude Code uyumu, tek repo (site+panel) |
-| Backend | Python + FastAPI | Mevcut Python birikimi, AI ekosistemi |
-| Veritabanı | PostgreSQL + pgvector | RLS ile güvenli multi-tenant, AI'ya hazır |
-| Multi-tenant | Paylaşımlı şema + `tenant_id` + RLS | Solo geliştirmede operasyonel sadelik |
-| Auth | Kendi JWT (FastAPI) | Vendor bağımlılığı yok, VDS uyumlu |
-| Konteynerizasyon | Docker Compose (+Redis, Caddy) | Yerel=prod, otomatik TLS |
-| Otomasyon | n8n (yan-etkiler için) | Çekirdek mantık backend'de kalır |
-| WhatsApp | Tenant başına ayrı numara, tek webhook | Marka bütünlüğü + Meta kısıtı |
-| Hosting | Hetzner Cloud (AB) | Maliyet + veri lokasyonu |
+Faz 1'in production'a taşınması, önceki genel mimari değerlendirmesinde belirlenen prensiple uyumlu: yerel ortamda çalışan Docker Compose seti, VDS'te aynen çalışır; ortam farkı sadece `.env` içeriğinde olur.
+
+Faz 1 kapsamında production'a taşıma henüz gündemde değil — önce randevu motorunun yerel ortamda API üzerinden doğrulanması gerekiyor. VDS/hosting sağlayıcı seçimi ve geçiş adımları, Faz 1 tamamlanıp WhatsApp entegrasyonuna geçilirken tekrar ele alınacak bir konu.
 
 ---
 
-*Bu doküman Faz 1 öncesi karar kaydı olarak tutulmalı. Herhangi bir teknoloji seçimi değiştirilirse, bu dosyaya değişiklik + gerekçe eklenmeli (sessizce değiştirilmemeli).*
+## 17. Güvenlik Prensipleri
+
+Faz 1 kapsamında öncelik sırası:
+
+1. **Tenant izolasyonu** — her API çağrısında, giriş yapmış kullanıcının `tenant_id`'si dışındaki verilere erişim mümkün olmamalı. Bu, Faz 1'in en kritik güvenlik gereksinimi (Bölüm 6).
+2. **Kimlik doğrulama** — panel girişi için standart, kendi barındırılan bir auth mekanizması (şifre hash'leme + oturum/token yönetimi); üçüncü parti bir servise bağımlılık Faz 1'de gerekmiyor.
+3. **Hassas veri saklama prensibi** — Faz 1'de WhatsApp access token gibi hassas veriler henüz sisteme girmiyor, ama şema tasarımı ileride bunları güvenli saklayacak şekilde (Bölüm 10) planlanmalı; bu, "şimdiden şifreleme altyapısı kurmak" değil, "ileride kurmayı zorlaştıracak bir tasarım hatası yapmamak" anlamına geliyor.
+
+RLS gibi veritabanı seviyesi ek güvenlik katmanları, Bölüm 6'da belirtildiği gibi Faz 1'de bilinçli olarak dışarıda bırakılıyor.
+
+---
+
+## 18. Uygulama Geliştirme Fazları
+
+**Faz 1 — Randevu Motoru (bu doküman kapsamı):**
+Bölüm 2'deki 10 maddenin tamamı, WhatsApp olmadan, API üzerinden uçtan uca çalışır ve test edilebilir durumda.
+
+**Faz 1.5 — WhatsApp Bağlantısı:**
+Faz 1'de doğrulanmış randevu motoru, Bölüm 10'da tarif edilen manuel WhatsApp bağlantısı üzerinden dış dünyaya açılır. n8n bu aşamada devreye girer (Bölüm 9).
+
+**Faz 2 — Modüler Genişleme:**
+`tenant_features` yapısı (Bölüm 7) üzerinden yeni özellikler tek tek eklenir: AI destekli esnek randevu (Bölüm 11), akıllı bekleme listesi, AI İş Hafızası. Her biri ayrı bir özellik anahtarı olarak, mevcut `classic_appointments` mantığını bozmadan eklenir.
+
+**Faz 3 — Platform Entegrasyonu:**
+ServisCep hizmet platformu entegrasyonu (`serviscep_integration`).
+
+---
+
+*Bu doküman Faz 1 öncesi karar kaydı olarak tutulmalı. Kapsam veya teknoloji kararı değiştirilirse, bu dosyaya değişiklik + gerekçe eklenmeli, sessizce değiştirilmemeli.*
