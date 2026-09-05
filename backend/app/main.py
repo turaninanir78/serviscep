@@ -5,6 +5,16 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.api import (
+    appointments,
+    auth,
+    availability,
+    availability_rules,
+    customers,
+    services,
+    staff_members,
+)
+
 app = FastAPI()
 
 CORS_ALLOW_ORIGIN = os.environ.get("CORS_ALLOW_ORIGIN", "http://localhost:3000")
@@ -12,9 +22,17 @@ CORS_ALLOW_ORIGIN = os.environ.get("CORS_ALLOW_ORIGIN", "http://localhost:3000")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[CORS_ALLOW_ORIGIN],
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST", "PATCH"],
     allow_headers=["*"],
 )
+
+app.include_router(auth.router)
+app.include_router(staff_members.router)
+app.include_router(services.router)
+app.include_router(availability_rules.router)
+app.include_router(customers.router)
+app.include_router(appointments.router)
+app.include_router(availability.router)
 
 DATABASE_URL = os.environ["DATABASE_URL"]
 
