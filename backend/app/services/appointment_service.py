@@ -2,6 +2,7 @@ from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -96,9 +97,18 @@ def _booked_intervals_for_staff_day(
         query = query.filter(Appointment.id != exclude_appointment_id)
 
     day_start, day_end = _day_bounds(target_date, tz)
+    # Bir onceki gunden gelen bir randevunun buffer'i yeni gune tasabilir
+    # (ör. 23:50'de biten + 30 dk buffer -> ertesi gunun 00:20'sine kadar
+    # isgal). Sadece `end_at > day_start` kontrolu bu randevuyu kacirir -
+    # etkin bitisi (`end_at + buffer_minutes`) kullanilmali, aksi halde bu
+    # gunun ilk dakikalari yanlislikla bos gorunur (DB'deki EXCLUDE
+    # constraint yine de dogru reddeder, ama kullanici once "bos" gorur).
+    effective_end_at = Appointment.end_at + func.make_interval(
+        0, 0, 0, 0, 0, Appointment.buffer_minutes
+    )
     rows = query.filter(
         Appointment.start_at < day_end,
-        Appointment.end_at > day_start,
+        effective_end_at > day_start,
     ).all()
     return [
         BookedInterval(start_at=row.start_at, end_at=row.end_at, buffer_minutes=row.buffer_minutes)

@@ -5,15 +5,17 @@ beklenmedik bir 409/500 alir. Bu test, has_conflict'in FALSE dedigi bir
 ciftin gercekten DB'ye yazilabildigini, TRUE dedigi bir ciftin ise DB
 tarafindan da reddedildigini dogrudan kontrol eder.
 """
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 
 from app.core.availability import has_conflict
 from app.db import SessionLocal
-from app.models import Appointment, Customer, Service, StaffMember, Tenant
+from app.models import Appointment, AvailabilityRule, Customer, Service, StaffMember, Tenant
+from app.services.appointment_service import create_appointment, get_available_slots
 
 TZ = ZoneInfo("Europe/Istanbul")
 
@@ -105,3 +107,50 @@ def test_has_conflict_matches_db_exclusion_constraint(db_fixtures):
     with pytest.raises(IntegrityError):
         db.commit()
     db.rollback()
+
+
+def test_cross_day_buffer_spillover_blocks_next_day_slot(db_fixtures):
+    # Onceki gunden gelen bir randevunun buffer'i yeni gune tasabilir.
+    # Randevu: 2026-09-07 (Pazartesi) 23:20-23:50, buffer=30 dk -> etkin
+    # isgal 2026-09-08 (Sali) 00:20'ye kadar suruyor.
+    db, tenant_id, staff_id, service_id, customer_id = db_fixtures
+
+    # 2026-09-08 bir Sali (date.weekday() == 1). Gece yarisindan hemen sonra
+    # da musaitlik olsun ki spillover'in etkisini gorebilelim.
+    db.add(
+        AvailabilityRule(
+            tenant_id=tenant_id,
+            staff_id=staff_id,
+            weekday=1,
+            start_time=time(0, 0),
+            end_time=time(3, 0),
+        )
+    )
+    db.commit()
+
+    create_appointment(
+        db,
+        tenant_id=tenant_id,
+        staff_id=staff_id,
+        service_id=service_id,
+        customer_id=customer_id,
+        start_at=datetime(2026, 9, 7, 23, 20),  # naive -> tenant yerel saati
+        buffer_minutes=30,
+    )
+
+    # Ertesi gunun (08 Eylul) 00:00 slotu artik BOS GORUNMEMELI - onceki
+    # randevunun buffer'i 00:20'ye kadar isgal ediyor.
+    slots = get_available_slots(db, tenant_id, staff_id, service_id, target_date=date(2026, 9, 8))
+    assert datetime(2026, 9, 8, 0, 0, tzinfo=TZ) not in slots
+
+    # O saatte randevu olusturma denemesi de engellenmeli.
+    with pytest.raises(HTTPException) as exc_info:
+        create_appointment(
+            db,
+            tenant_id=tenant_id,
+            staff_id=staff_id,
+            service_id=service_id,
+            customer_id=customer_id,
+            start_at=datetime(2026, 9, 8, 0, 10),
+        )
+    assert exc_info.value.status_code == 409
