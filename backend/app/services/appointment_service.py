@@ -2,6 +2,7 @@ from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.availability import (
@@ -124,8 +125,17 @@ def create_appointment(
     _get_customer_or_404(db, customer_id, tenant_id)
 
     tz = ZoneInfo(tenant.timezone)
+
+    # Kural: offset icermeyen (naive) start_at, tenant'in saat dilimi olarak
+    # yorumlanir. Offset iceren start_at ise ONCE tenant'in saat dilimine
+    # cevrilir, sonra islenir - aksi halde asagidaki `.date()` cagrisi, gun
+    # sinirina yakin randevularda (ornegin tenant UTC+3 iken UTC ile tenant
+    # yerel takvimi farkli gune denk dusuyorsa) yanlis gunun mevcut
+    # randevularini sorgulayip cakismayi kacirabilir.
     if start_at.tzinfo is None:
         start_at = start_at.replace(tzinfo=tz)
+    else:
+        start_at = start_at.astimezone(tz)
 
     end_at = start_at + timedelta(minutes=service.duration_minutes)
 
@@ -147,6 +157,18 @@ def create_appointment(
         created_via="dashboard",
     )
     db.add(appointment)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Uygulama seviyesindeki on-kontrolu (yukarida) es zamanli iki
+        # istegin ikisi de gecebilir (biri commit etmeden diger okuma
+        # yapabilir) - asil guvence excl_appointments_staff_time_overlap
+        # constraint'idir (bkz. migration 0003). Buraya dusmek, on-kontrolun
+        # yarisi kacirdigi ama DB'nin yakaladigi anlamina gelir.
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Time slot conflicts with an existing appointment (detected by database constraint)",
+        )
     db.refresh(appointment)
     return appointment

@@ -126,3 +126,4 @@ class Appointment(Base):
     status = Column(String(20), nullable=False, server_default="pending")
     created_via = Column(String(20), nullable=False)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    buffer_minutes = Column(Integer, nullable=False, server_default="0")
