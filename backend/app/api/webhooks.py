@@ -34,7 +34,8 @@ def verify_webhook(
 ):
     if (
         hub_mode == "subscribe"
-        and hub_verify_token == WHATSAPP_WEBHOOK_VERIFY_TOKEN
+        and hub_verify_token is not None
+        and hmac.compare_digest(hub_verify_token, WHATSAPP_WEBHOOK_VERIFY_TOKEN)
         and hub_challenge is not None
     ):
         return Response(content=hub_challenge, media_type="text/plain")
