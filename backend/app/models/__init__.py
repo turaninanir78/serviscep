@@ -1,5 +1,6 @@
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Column,
     DateTime,
     ForeignKey,
@@ -8,6 +9,7 @@ from sqlalchemy import (
     Numeric,
     SmallInteger,
     String,
+    Text,
     Time,
     UniqueConstraint,
     func,
@@ -23,6 +25,7 @@ class Tenant(Base):
     name = Column(String(255), nullable=False)
     whatsapp_phone_number_id = Column(String(64))
     whatsapp_waba_id = Column(String(64))
+    whatsapp_access_token_encrypted = Column(Text)
     plan_type = Column(String(20), nullable=False, server_default="classic")
     timezone = Column(String(64), nullable=False, server_default="Europe/Istanbul")
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
@@ -128,3 +131,23 @@ class Appointment(Base):
     created_via = Column(String(20), nullable=False)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     buffer_minutes = Column(Integer, nullable=False, server_default="0")
+
+
+class Conversation(Base):
+    __tablename__ = "conversations"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["customer_id", "tenant_id"],
+            ["customers.id", "customers.tenant_id"],
+            name="fk_conversations_customer_id_tenant_id",
+        ),
+        CheckConstraint("direction IN ('in', 'out')", name="ck_conversations_direction"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False)
+    customer_id = Column(Integer, nullable=True)
+    direction = Column(String(3), nullable=False)
+    message_text = Column(Text)
+    wa_message_id = Column(String(255), unique=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())

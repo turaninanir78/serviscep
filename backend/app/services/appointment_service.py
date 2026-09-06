@@ -1,3 +1,4 @@
+import logging
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -13,7 +14,10 @@ from app.core.availability import (
     compute_available_slots,
     has_conflict,
 )
+from app.integrations.whatsapp import send_whatsapp_message
 from app.models import Appointment, AvailabilityRule, Customer, Service, StaffMember, Tenant
+
+logger = logging.getLogger(__name__)
 
 # migration 0003_appointment_overlap_exclusion.py ile eklenen constraint adi.
 _OVERLAP_EXCLUSION_CONSTRAINT_NAME = "excl_appointments_staff_time_overlap"
@@ -168,7 +172,7 @@ def create_appointment(
     tenant = _get_tenant(db, tenant_id)
     _get_staff_or_404(db, staff_id, tenant_id)
     service = _get_service_or_404(db, service_id, tenant_id)
-    _get_customer_or_404(db, customer_id, tenant_id)
+    customer = _get_customer_or_404(db, customer_id, tenant_id)
 
     tz = ZoneInfo(tenant.timezone)
 
@@ -216,7 +220,58 @@ def create_appointment(
     db.add(appointment)
     _commit_or_raise_conflict(db)
     db.refresh(appointment)
+
+    _notify_appointment_created(db, tenant, customer, appointment)
+
     return appointment
+
+
+def _format_local_datetime(appointment: Appointment, tenant: Tenant) -> str:
+    tz = ZoneInfo(tenant.timezone)
+    local_start = appointment.start_at.astimezone(tz)
+    return local_start.strftime("%d.%m.%Y %H:%M")
+
+
+def _notify_appointment_created(
+    db: Session, tenant: Tenant, customer: Customer, appointment: Appointment
+) -> None:
+    if not (
+        tenant.whatsapp_phone_number_id
+        and tenant.whatsapp_access_token_encrypted
+        and customer.whatsapp_number
+    ):
+        return
+
+    text = f"Randevunuz onaylandı: {_format_local_datetime(appointment, tenant)}"
+    try:
+        send_whatsapp_message(db, tenant, customer.whatsapp_number, text, customer_id=customer.id)
+    except Exception:
+        # send_whatsapp_message zaten kendi icinde tum hatalari yutar ve
+        # exception firlatmaz; bu try/except, ileride o sozlesme bozulursa
+        # bile randevu akisinin ASLA etkilenmemesini garanti eden ikinci
+        # bir savunma katmani.
+        logger.exception(
+            "WhatsApp onay bildirimi gonderilemedi (appointment_id=%s)", appointment.id
+        )
+
+
+def _notify_appointment_cancelled(
+    db: Session, tenant: Tenant, customer: Customer, appointment: Appointment
+) -> None:
+    if not (
+        tenant.whatsapp_phone_number_id
+        and tenant.whatsapp_access_token_encrypted
+        and customer.whatsapp_number
+    ):
+        return
+
+    text = f"Randevunuz iptal edildi: {_format_local_datetime(appointment, tenant)}"
+    try:
+        send_whatsapp_message(db, tenant, customer.whatsapp_number, text, customer_id=customer.id)
+    except Exception:
+        logger.exception(
+            "WhatsApp iptal bildirimi gonderilemedi (appointment_id=%s)", appointment.id
+        )
 
 
 def _commit_or_raise_conflict(db: Session) -> None:
@@ -333,7 +388,13 @@ def _transition_appointment_status(
 
 
 def cancel_appointment(db: Session, tenant_id: int, appointment_id: int) -> Appointment:
-    return _transition_appointment_status(db, tenant_id, appointment_id, "cancelled")
+    appointment = _transition_appointment_status(db, tenant_id, appointment_id, "cancelled")
+
+    tenant = _get_tenant(db, tenant_id)
+    customer = _get_customer_or_404(db, appointment.customer_id, tenant_id)
+    _notify_appointment_cancelled(db, tenant, customer, appointment)
+
+    return appointment
 
 
 def complete_appointment(db: Session, tenant_id: int, appointment_id: int) -> Appointment:

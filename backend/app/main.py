@@ -13,6 +13,8 @@ from app.api import (
     customers,
     services,
     staff_members,
+    tenants,
+    webhooks,
 )
 
 app = FastAPI()
@@ -33,6 +35,8 @@ app.include_router(availability_rules.router)
 app.include_router(customers.router)
 app.include_router(appointments.router)
 app.include_router(availability.router)
+app.include_router(tenants.router)
+app.include_router(webhooks.router)
 
 DATABASE_URL = os.environ["DATABASE_URL"]
 
