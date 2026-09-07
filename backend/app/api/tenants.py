@@ -5,10 +5,21 @@ from sqlalchemy.orm import Session
 from app.crypto import encrypt_token
 from app.db import get_db
 from app.models import Tenant
-from app.schemas.tenant import TenantWhatsAppConnect, TenantWhatsAppConnectResponse
+from app.schemas.tenant import TenantOut, TenantWhatsAppConnect, TenantWhatsAppConnectResponse
 from app.security import AuthContext, get_current_tenant
 
 router = APIRouter(prefix="/tenants", tags=["tenants"])
+
+
+@router.get("/me", response_model=TenantOut)
+def get_my_tenant(
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(get_current_tenant),
+):
+    tenant = db.query(Tenant).filter(Tenant.id == auth.tenant_id).first()
+    if tenant is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+    return tenant
 
 
 @router.patch("/me/whatsapp", response_model=TenantWhatsAppConnectResponse)
