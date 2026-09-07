@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { api, ApiError } from "@/lib/api";
+import { api } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import { describeApiError } from "@/lib/errors";
 import type { Appointment, Customer, Service, StaffMember } from "@/lib/types";
@@ -39,7 +39,7 @@ export default function AppointmentsPage() {
         setStaffMembers(staffData);
       })
       .catch((err) => {
-        setError(err instanceof ApiError ? describeApiError(err) : "Randevular yüklenirken bir hata oluştu.");
+        setError(describeApiError(err));
       });
   }, []);
 
