@@ -49,3 +49,10 @@ export interface AvailabilityRule {
   start_time: string;
   end_time: string;
 }
+
+export interface AvailableSlotsResponse {
+  date: string;
+  staff_id: number;
+  service_id: number;
+  slots: string[];
+}

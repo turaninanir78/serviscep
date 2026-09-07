@@ -1,6 +1,7 @@
 import type {
   Appointment,
   AvailabilityRule,
+  AvailableSlotsResponse,
   Customer,
   Service,
   StaffMember,
@@ -82,6 +83,13 @@ export interface CreateAvailabilityRuleInput {
   end_time: string;
 }
 
+export interface CreateAppointmentInput {
+  staff_id: number;
+  service_id: number;
+  customer_id: number;
+  start_at: string;
+}
+
 export const api = {
   login: (email: string, password: string) =>
     request<TokenResponse>("/auth/login", {
@@ -98,6 +106,23 @@ export const api = {
   getMyTenant: (token: string) => request<Tenant>("/tenants/me", {}, token),
 
   getAppointments: (token: string) => request<Appointment[]>("/appointments", {}, token),
+
+  createAppointment: (token: string, input: CreateAppointmentInput) =>
+    request<Appointment>(
+      "/appointments",
+      { method: "POST", body: JSON.stringify(input) },
+      token,
+    ),
+
+  cancelAppointment: (token: string, id: number) =>
+    request<Appointment>(`/appointments/${id}/cancel`, { method: "POST" }, token),
+
+  getAvailableSlots: (token: string, staffId: number, serviceId: number, date: string) =>
+    request<AvailableSlotsResponse>(
+      `/availability/slots?staff_id=${staffId}&service_id=${serviceId}&date=${date}`,
+      {},
+      token,
+    ),
 
   getCustomers: (token: string) => request<Customer[]>("/customers", {}, token),
 
