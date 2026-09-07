@@ -21,6 +21,7 @@ export interface Customer {
   tenant_id: number;
   whatsapp_number: string;
   display_name: string | null;
+  first_seen_at: string;
 }
 
 export interface Service {
@@ -38,4 +39,13 @@ export interface StaffMember {
   tenant_id: number;
   name: string;
   is_active: boolean;
+}
+
+export interface AvailabilityRule {
+  id: number;
+  tenant_id: number;
+  staff_id: number;
+  weekday: number;
+  start_time: string;
+  end_time: string;
 }

@@ -1,4 +1,11 @@
-import type { Appointment, Customer, Service, StaffMember, Tenant } from "./types";
+import type {
+  Appointment,
+  AvailabilityRule,
+  Customer,
+  Service,
+  StaffMember,
+  Tenant,
+} from "./types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? "";
 
@@ -48,6 +55,33 @@ interface TokenResponse {
   token_type: string;
 }
 
+export interface CreateStaffMemberInput {
+  name: string;
+}
+
+export interface UpdateStaffMemberInput {
+  is_active?: boolean;
+  name?: string;
+}
+
+export interface CreateServiceInput {
+  name: string;
+  duration_minutes: number;
+  price?: number;
+  default_buffer_minutes?: number;
+}
+
+export interface UpdateServiceInput {
+  is_active?: boolean;
+}
+
+export interface CreateAvailabilityRuleInput {
+  staff_id: number;
+  weekday: number;
+  start_time: string;
+  end_time: string;
+}
+
 export const api = {
   login: (email: string, password: string) =>
     request<TokenResponse>("/auth/login", {
@@ -69,5 +103,39 @@ export const api = {
 
   getServices: (token: string) => request<Service[]>("/services", {}, token),
 
+  createService: (token: string, input: CreateServiceInput) =>
+    request<Service>("/services", { method: "POST", body: JSON.stringify(input) }, token),
+
+  updateService: (token: string, id: number, input: UpdateServiceInput) =>
+    request<Service>(
+      `/services/${id}`,
+      { method: "PATCH", body: JSON.stringify(input) },
+      token,
+    ),
+
   getStaffMembers: (token: string) => request<StaffMember[]>("/staff_members", {}, token),
+
+  createStaffMember: (token: string, input: CreateStaffMemberInput) =>
+    request<StaffMember>(
+      "/staff_members",
+      { method: "POST", body: JSON.stringify(input) },
+      token,
+    ),
+
+  updateStaffMember: (token: string, id: number, input: UpdateStaffMemberInput) =>
+    request<StaffMember>(
+      `/staff_members/${id}`,
+      { method: "PATCH", body: JSON.stringify(input) },
+      token,
+    ),
+
+  getAvailabilityRules: (token: string) =>
+    request<AvailabilityRule[]>("/availability_rules", {}, token),
+
+  createAvailabilityRule: (token: string, input: CreateAvailabilityRuleInput) =>
+    request<AvailabilityRule>(
+      "/availability_rules",
+      { method: "POST", body: JSON.stringify(input) },
+      token,
+    ),
 };

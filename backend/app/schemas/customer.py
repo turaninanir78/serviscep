@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict
 
 
@@ -13,3 +15,4 @@ class CustomerOut(BaseModel):
     tenant_id: int
     whatsapp_number: str
     display_name: str | None
+    first_seen_at: datetime
