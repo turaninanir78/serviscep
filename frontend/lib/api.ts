@@ -90,6 +90,10 @@ export interface CreateAppointmentInput {
   start_at: string;
 }
 
+export interface RescheduleAppointmentInput {
+  start_at: string;
+}
+
 export const api = {
   login: (email: string, password: string) =>
     request<TokenResponse>("/auth/login", {
@@ -116,6 +120,19 @@ export const api = {
 
   cancelAppointment: (token: string, id: number) =>
     request<Appointment>(`/appointments/${id}/cancel`, { method: "POST" }, token),
+
+  completeAppointment: (token: string, id: number) =>
+    request<Appointment>(`/appointments/${id}/complete`, { method: "POST" }, token),
+
+  markAppointmentNoShow: (token: string, id: number) =>
+    request<Appointment>(`/appointments/${id}/no-show`, { method: "POST" }, token),
+
+  rescheduleAppointment: (token: string, id: number, input: RescheduleAppointmentInput) =>
+    request<Appointment>(
+      `/appointments/${id}`,
+      { method: "PATCH", body: JSON.stringify(input) },
+      token,
+    ),
 
   getAvailableSlots: (token: string, staffId: number, serviceId: number, date: string) =>
     request<AvailableSlotsResponse>(

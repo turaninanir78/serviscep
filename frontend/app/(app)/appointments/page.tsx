@@ -7,6 +7,7 @@ import { getToken } from "@/lib/auth";
 import { describeApiError } from "@/lib/errors";
 import type { Appointment, Customer, Service, StaffMember } from "@/lib/types";
 import NewAppointmentForm from "./NewAppointmentForm";
+import RescheduleForm from "./RescheduleForm";
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "Beklemede",
@@ -16,7 +17,20 @@ const STATUS_LABELS: Record<string, string> = {
   no_show: "Gelmedi",
 };
 
-const CANCELLABLE_STATUSES = new Set(["pending", "confirmed"]);
+const STATUS_BADGE_STYLES: Record<string, string> = {
+  pending: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300",
+  confirmed: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
+  cancelled: "bg-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
+  completed: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
+  no_show: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
+};
+
+// Bu durumlardaki randevularda aksiyon butonları (iptal, tamamlandı,
+// gelmedi, yeniden planla) gösterilir - backend de reschedule/cancel/
+// complete/no-show'u sadece bu iki durumdan kabul ediyor.
+const ACTIVE_STATUSES = new Set(["pending", "confirmed"]);
+
+type ActiveForm = { type: "create" } | { type: "reschedule"; appointment: Appointment };
 
 export default function AppointmentsPage() {
   const [appointments, setAppointments] = useState<Appointment[] | null>(null);
@@ -24,8 +38,8 @@ export default function AppointmentsPage() {
   const [services, setServices] = useState<Service[]>([]);
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [showForm, setShowForm] = useState(false);
-  const [cancellingId, setCancellingId] = useState<number | null>(null);
+  const [activeForm, setActiveForm] = useState<ActiveForm | null>(null);
+  const [actingOnId, setActingOnId] = useState<number | null>(null);
 
   function loadAll() {
     const token = getToken();
@@ -69,8 +83,8 @@ export default function AppointmentsPage() {
     return new Date(iso).toLocaleString("tr-TR", { dateStyle: "short", timeStyle: "short" });
   }
 
-  function handleCreated() {
-    setShowForm(false);
+  function handleFormDone() {
+    setActiveForm(null);
     loadAll();
   }
 
@@ -78,21 +92,58 @@ export default function AppointmentsPage() {
     const token = getToken();
     if (!token) return;
 
-    const customerName = customerLabel(appointment.customer_id);
     const when = formatDateTime(appointment.start_at);
-    if (!window.confirm(`${customerName} - ${when} randevusunu iptal etmek istediğinize emin misiniz?`)) {
+    if (
+      !window.confirm(
+        `${customerLabel(appointment.customer_id)} - ${when} randevusunu iptal etmek istediğinize emin misiniz?`,
+      )
+    ) {
       return;
     }
 
     setError(null);
-    setCancellingId(appointment.id);
+    setActingOnId(appointment.id);
     try {
       await api.cancelAppointment(token, appointment.id);
       loadAll();
     } catch (err) {
       setError(describeApiError(err));
     } finally {
-      setCancellingId(null);
+      setActingOnId(null);
+    }
+  }
+
+  async function handleComplete(appointment: Appointment) {
+    const token = getToken();
+    if (!token) return;
+    if (!window.confirm("Bu randevu tamamlandı olarak işaretlensin mi?")) return;
+
+    setError(null);
+    setActingOnId(appointment.id);
+    try {
+      await api.completeAppointment(token, appointment.id);
+      loadAll();
+    } catch (err) {
+      setError(describeApiError(err));
+    } finally {
+      setActingOnId(null);
+    }
+  }
+
+  async function handleNoShow(appointment: Appointment) {
+    const token = getToken();
+    if (!token) return;
+    if (!window.confirm("Bu randevu 'gelmedi' olarak işaretlensin mi?")) return;
+
+    setError(null);
+    setActingOnId(appointment.id);
+    try {
+      await api.markAppointmentNoShow(token, appointment.id);
+      loadAll();
+    } catch (err) {
+      setError(describeApiError(err));
+    } finally {
+      setActingOnId(null);
     }
   }
 
@@ -100,9 +151,9 @@ export default function AppointmentsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-black dark:text-zinc-50">Randevular</h1>
-        {!showForm && (
+        {!activeForm && (
           <button
-            onClick={() => setShowForm(true)}
+            onClick={() => setActiveForm({ type: "create" })}
             className="rounded bg-black px-3 py-2 text-sm font-medium text-white dark:bg-white dark:text-black"
           >
             Yeni Randevu
@@ -110,14 +161,26 @@ export default function AppointmentsPage() {
         )}
       </div>
 
-      {showForm && (
+      {activeForm?.type === "create" && (
         <NewAppointmentForm
           token={getToken() ?? ""}
           staffMembers={staffMembers}
           services={services}
           customers={customers}
-          onCreated={handleCreated}
-          onCancel={() => setShowForm(false)}
+          onCreated={handleFormDone}
+          onCancel={() => setActiveForm(null)}
+        />
+      )}
+
+      {activeForm?.type === "reschedule" && (
+        <RescheduleForm
+          token={getToken() ?? ""}
+          appointment={activeForm.appointment}
+          staffMembers={staffMembers}
+          services={services}
+          customers={customers}
+          onRescheduled={handleFormDone}
+          onCancel={() => setActiveForm(null)}
         />
       )}
 
@@ -133,7 +196,7 @@ export default function AppointmentsPage() {
 
       {!error && appointments !== null && appointments.length > 0 && (
         <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
-          <table className="w-full min-w-[720px] border-collapse text-sm">
+          <table className="w-full min-w-[820px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-zinc-200 bg-zinc-50 text-left dark:border-zinc-800 dark:bg-zinc-900">
                 <th className="px-4 py-2 font-medium text-zinc-600 dark:text-zinc-400">Müşteri</th>
@@ -145,39 +208,73 @@ export default function AppointmentsPage() {
               </tr>
             </thead>
             <tbody>
-              {appointments.map((appointment) => (
-                <tr
-                  key={appointment.id}
-                  className="border-b border-zinc-100 last:border-0 dark:border-zinc-900"
-                >
-                  <td className="px-4 py-2 text-black dark:text-zinc-50">
-                    {customerLabel(appointment.customer_id)}
-                  </td>
-                  <td className="px-4 py-2 text-black dark:text-zinc-50">
-                    {serviceLabel(appointment.service_id)}
-                  </td>
-                  <td className="px-4 py-2 text-black dark:text-zinc-50">
-                    {staffLabel(appointment.staff_id)}
-                  </td>
-                  <td className="px-4 py-2 text-black dark:text-zinc-50">
-                    {formatDateTime(appointment.start_at)}
-                  </td>
-                  <td className="px-4 py-2 text-black dark:text-zinc-50">
-                    {STATUS_LABELS[appointment.status] ?? appointment.status}
-                  </td>
-                  <td className="px-4 py-2 text-right">
-                    {CANCELLABLE_STATUSES.has(appointment.status) && (
-                      <button
-                        onClick={() => handleCancel(appointment)}
-                        disabled={cancellingId === appointment.id}
-                        className="rounded border border-zinc-300 px-3 py-1 text-xs text-zinc-700 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+              {appointments.map((appointment) => {
+                const isActive = ACTIVE_STATUSES.has(appointment.status);
+                const busy = actingOnId === appointment.id;
+                return (
+                  <tr
+                    key={appointment.id}
+                    className="border-b border-zinc-100 last:border-0 dark:border-zinc-900"
+                  >
+                    <td className="px-4 py-2 text-black dark:text-zinc-50">
+                      {customerLabel(appointment.customer_id)}
+                    </td>
+                    <td className="px-4 py-2 text-black dark:text-zinc-50">
+                      {serviceLabel(appointment.service_id)}
+                    </td>
+                    <td className="px-4 py-2 text-black dark:text-zinc-50">
+                      {staffLabel(appointment.staff_id)}
+                    </td>
+                    <td className="px-4 py-2 text-black dark:text-zinc-50">
+                      {formatDateTime(appointment.start_at)}
+                    </td>
+                    <td className="px-4 py-2">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                          STATUS_BADGE_STYLES[appointment.status] ??
+                          "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+                        }`}
                       >
-                        İptal Et
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                        {STATUS_LABELS[appointment.status] ?? appointment.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2">
+                      {isActive && (
+                        <div className="flex flex-wrap justify-end gap-1">
+                          <button
+                            onClick={() => setActiveForm({ type: "reschedule", appointment })}
+                            disabled={busy}
+                            className="rounded border border-zinc-300 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                          >
+                            Yeniden Planla
+                          </button>
+                          <button
+                            onClick={() => handleComplete(appointment)}
+                            disabled={busy}
+                            className="rounded border border-zinc-300 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                          >
+                            Tamamlandı
+                          </button>
+                          <button
+                            onClick={() => handleNoShow(appointment)}
+                            disabled={busy}
+                            className="rounded border border-zinc-300 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                          >
+                            Gelmedi
+                          </button>
+                          <button
+                            onClick={() => handleCancel(appointment)}
+                            disabled={busy}
+                            className="rounded border border-zinc-300 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                          >
+                            İptal Et
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
