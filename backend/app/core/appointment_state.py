@@ -11,10 +11,13 @@ ACTIVE_STATUSES = frozenset({"pending", "confirmed"})
 TERMINAL_STATUSES = frozenset({"cancelled", "completed", "no_show"})
 ALL_STATUSES = ACTIVE_STATUSES | TERMINAL_STATUSES
 
-# Hangi durumdan hangi (terminal) hedef durumlara gecilebilir. Terminal
-# durumlardan baska bir yere gecis yok - randevu "kapanmis" sayilir.
+# Hangi durumdan hangi hedef durumlara gecilebilir. "pending" ayrica
+# "confirmed"e gecebilir (personelin panelden manuel onaylamasi -
+# WhatsApp'tan otomatik giden onay mesajindan bagimsiz, sadece sistem
+# ici durumu degistiren bir adim). Terminal durumlardan baska bir yere
+# gecis yok - randevu "kapanmis" sayilir.
 ALLOWED_STATUS_TRANSITIONS: dict[str, frozenset[str]] = {
-    "pending": TERMINAL_STATUSES,
+    "pending": TERMINAL_STATUSES | {"confirmed"},
     "confirmed": TERMINAL_STATUSES,
     "cancelled": frozenset(),
     "completed": frozenset(),

@@ -8,6 +8,7 @@ from app.security import AuthContext, get_current_tenant
 from app.services.appointment_service import (
     cancel_appointment,
     complete_appointment,
+    confirm_appointment,
     create_appointment,
     mark_appointment_no_show,
     reschedule_appointment,
@@ -72,6 +73,15 @@ def reschedule_appointment_endpoint(
         staff_id=payload.staff_id,
         buffer_minutes=payload.buffer_minutes,
     )
+
+
+@router.post("/{appointment_id}/confirm", response_model=AppointmentOut)
+def confirm_appointment_endpoint(
+    appointment_id: int,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(get_current_tenant),
+):
+    return confirm_appointment(db, tenant_id=auth.tenant_id, appointment_id=appointment_id)
 
 
 @router.post("/{appointment_id}/cancel", response_model=AppointmentOut)

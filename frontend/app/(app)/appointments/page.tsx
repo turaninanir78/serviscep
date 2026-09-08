@@ -113,6 +113,23 @@ export default function AppointmentsPage() {
     }
   }
 
+  async function handleConfirm(appointment: Appointment) {
+    const token = getToken();
+    if (!token) return;
+    if (!window.confirm("Bu randevu onaylandı olarak işaretlensin mi?")) return;
+
+    setError(null);
+    setActingOnId(appointment.id);
+    try {
+      await api.confirmAppointment(token, appointment.id);
+      loadAll();
+    } catch (err) {
+      setError(describeApiError(err));
+    } finally {
+      setActingOnId(null);
+    }
+  }
+
   async function handleComplete(appointment: Appointment) {
     const token = getToken();
     if (!token) return;
@@ -241,6 +258,15 @@ export default function AppointmentsPage() {
                     <td className="px-4 py-2">
                       {isActive && (
                         <div className="flex flex-wrap justify-end gap-1">
+                          {appointment.status === "pending" && (
+                            <button
+                              onClick={() => handleConfirm(appointment)}
+                              disabled={busy}
+                              className="rounded border border-zinc-300 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                            >
+                              Onayla
+                            </button>
+                          )}
                           <button
                             onClick={() => setActiveForm({ type: "reschedule", appointment })}
                             disabled={busy}

@@ -118,6 +118,9 @@ export const api = {
       token,
     ),
 
+  confirmAppointment: (token: string, id: number) =>
+    request<Appointment>(`/appointments/${id}/confirm`, { method: "POST" }, token),
+
   cancelAppointment: (token: string, id: number) =>
     request<Appointment>(`/appointments/${id}/cancel`, { method: "POST" }, token),
 

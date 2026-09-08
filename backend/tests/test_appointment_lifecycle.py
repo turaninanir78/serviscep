@@ -14,6 +14,7 @@ from app.models import Customer, Service, StaffMember, Tenant
 from app.services.appointment_service import (
     cancel_appointment,
     complete_appointment,
+    confirm_appointment,
     create_appointment,
     reschedule_appointment,
 )
@@ -106,6 +107,48 @@ def test_cancelled_appointment_slot_can_be_rebooked(fixtures):
     )
     assert b.id is not None
     assert b.status == "pending"
+
+
+def test_confirm_transitions_pending_to_confirmed(fixtures):
+    db, tenant_id, staff_id, service_id, customer_id = fixtures
+
+    a = create_appointment(
+        db, tenant_id=tenant_id, staff_id=staff_id, service_id=service_id,
+        customer_id=customer_id, start_at=datetime(2026, 9, 7, 16, 0),
+    )
+    assert a.status == "pending"
+
+    confirmed = confirm_appointment(db, tenant_id=tenant_id, appointment_id=a.id)
+    assert confirmed.id == a.id
+    assert confirmed.status == "confirmed"
+
+
+def test_confirming_already_confirmed_appointment_returns_409(fixtures):
+    db, tenant_id, staff_id, service_id, customer_id = fixtures
+
+    a = create_appointment(
+        db, tenant_id=tenant_id, staff_id=staff_id, service_id=service_id,
+        customer_id=customer_id, start_at=datetime(2026, 9, 7, 17, 0),
+    )
+    confirm_appointment(db, tenant_id=tenant_id, appointment_id=a.id)
+
+    with pytest.raises(HTTPException) as exc_info:
+        confirm_appointment(db, tenant_id=tenant_id, appointment_id=a.id)
+    assert exc_info.value.status_code == 409
+
+
+def test_confirming_terminal_appointment_returns_409(fixtures):
+    db, tenant_id, staff_id, service_id, customer_id = fixtures
+
+    a = create_appointment(
+        db, tenant_id=tenant_id, staff_id=staff_id, service_id=service_id,
+        customer_id=customer_id, start_at=datetime(2026, 9, 7, 18, 0),
+    )
+    cancel_appointment(db, tenant_id=tenant_id, appointment_id=a.id)
+
+    with pytest.raises(HTTPException) as exc_info:
+        confirm_appointment(db, tenant_id=tenant_id, appointment_id=a.id)
+    assert exc_info.value.status_code == 409
 
 
 def test_invalid_status_transitions_return_409(fixtures):

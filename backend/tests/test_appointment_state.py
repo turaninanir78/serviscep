@@ -24,6 +24,14 @@ def test_active_statuses_can_transition_to_any_terminal_status():
             assert can_transition_to(active_status, terminal_status) is True
 
 
+def test_pending_can_transition_to_confirmed():
+    assert can_transition_to("pending", "confirmed") is True
+
+
+def test_confirmed_cannot_transition_to_confirmed():
+    assert can_transition_to("confirmed", "confirmed") is False
+
+
 def test_terminal_statuses_cannot_transition_anywhere():
     for terminal_status in TERMINAL_STATUSES:
         for target in ACTIVE_STATUSES | TERMINAL_STATUSES:

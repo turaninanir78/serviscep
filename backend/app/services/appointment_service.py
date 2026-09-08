@@ -387,6 +387,10 @@ def _transition_appointment_status(
     return appointment
 
 
+def confirm_appointment(db: Session, tenant_id: int, appointment_id: int) -> Appointment:
+    return _transition_appointment_status(db, tenant_id, appointment_id, "confirmed")
+
+
 def cancel_appointment(db: Session, tenant_id: int, appointment_id: int) -> Appointment:
     appointment = _transition_appointment_status(db, tenant_id, appointment_id, "cancelled")
 
