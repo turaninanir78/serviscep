@@ -16,3 +16,12 @@ Bu özet, kullanıcının başka bir yere (örneğin bir denetim
 aracına) doğrudan kopyala-yapıştır yapabileceği şekilde, kod
 bloğu içinde, sade metin olarak yazılmalı — teknik jargon veya
 uzun açıklama olmadan.
+
+# CI (GitHub Actions)
+
+`.github/workflows/ci.yml`, `main`'e her push'ta ve her pull
+request'te otomatik tetiklenir — iki paralel job çalıştırır:
+`backend` (Postgres service container + `pytest`) ve `frontend`
+(`npm test` + `npm run build`). Sonuç, ilgili commit'in veya
+PR'ın yanındaki durum simgesinden ya da repo'nun GitHub'daki
+"Actions" sekmesinden görülebilir.
