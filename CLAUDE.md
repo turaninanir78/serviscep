@@ -19,7 +19,7 @@ uzun açıklama olmadan.
 
 # CI (GitHub Actions)
 
-`.github/workflows/ci.yml`, `main`'e her push'ta ve her pull
+`.github/workflows/ci.yml`, `master`'a her push'ta ve her pull
 request'te otomatik tetiklenir — iki paralel job çalıştırır:
 `backend` (Postgres service container + `pytest`) ve `frontend`
 (`npm test` + `npm run build`). Sonuç, ilgili commit'in veya
