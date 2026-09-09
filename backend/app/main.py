@@ -24,6 +24,11 @@ CORS_ALLOW_ORIGIN = os.environ.get("CORS_ALLOW_ORIGIN", "http://localhost:3000")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[CORS_ALLOW_ORIGIN],
+    # httpOnly auth cookie'sinin cross-origin (frontend:3000 -> backend:8000)
+    # istekleriyle gonderilip alinabilmesi icin gerekli. allow_credentials=True
+    # ile birlikte allow_origins ASLA "*" olamaz (tarayici boyle bir yaniti
+    # reddeder) - zaten tek, acik bir origin kullaniyoruz.
+    allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH"],
     allow_headers=["*"],
 )

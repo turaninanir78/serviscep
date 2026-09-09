@@ -3,7 +3,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 
 import { api } from "@/lib/api";
-import { getToken } from "@/lib/auth";
 import { describeApiError } from "@/lib/errors";
 import type { AvailabilityRule, StaffMember } from "@/lib/types";
 
@@ -29,20 +28,17 @@ export default function AvailabilityPage() {
   const [endTime, setEndTime] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  function loadRules(token: string) {
+  function loadRules() {
     api
-      .getAvailabilityRules(token)
+      .getAvailabilityRules()
       .then(setRules)
       .catch((err) => setError(describeApiError(err)));
   }
 
   useEffect(() => {
-    const token = getToken();
-    if (!token) return;
-
-    loadRules(token);
+    loadRules();
     api
-      .getStaffMembers(token)
+      .getStaffMembers()
       .then((data) => {
         setStaffMembers(data);
         if (data.length > 0) setStaffId(String(data[0].id));
@@ -65,13 +61,12 @@ export default function AvailabilityPage() {
       return;
     }
 
-    const token = getToken();
-    if (!token || !staffId) return;
+    if (!staffId) return;
 
     setError(null);
     setSubmitting(true);
     try {
-      await api.createAvailabilityRule(token, {
+      await api.createAvailabilityRule({
         staff_id: Number(staffId),
         weekday: Number(weekday),
         start_time: startTime,
@@ -79,7 +74,7 @@ export default function AvailabilityPage() {
       });
       setStartTime("");
       setEndTime("");
-      loadRules(token);
+      loadRules();
     } catch (err) {
       setError(describeApiError(err));
     } finally {

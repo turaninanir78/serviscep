@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 
 import { api } from "@/lib/api";
-import { getToken } from "@/lib/auth";
 import { describeApiError } from "@/lib/errors";
 import type { Appointment, Customer, Service, StaffMember } from "@/lib/types";
 import NewAppointmentForm from "./NewAppointmentForm";
@@ -42,14 +41,11 @@ export default function AppointmentsPage() {
   const [actingOnId, setActingOnId] = useState<number | null>(null);
 
   function loadAll() {
-    const token = getToken();
-    if (!token) return;
-
     Promise.all([
-      api.getAppointments(token),
-      api.getCustomers(token),
-      api.getServices(token),
-      api.getStaffMembers(token),
+      api.getAppointments(),
+      api.getCustomers(),
+      api.getServices(),
+      api.getStaffMembers(),
     ])
       .then(([appointmentsData, customersData, servicesData, staffData]) => {
         setAppointments(appointmentsData);
@@ -89,9 +85,6 @@ export default function AppointmentsPage() {
   }
 
   async function handleCancel(appointment: Appointment) {
-    const token = getToken();
-    if (!token) return;
-
     const when = formatDateTime(appointment.start_at);
     if (
       !window.confirm(
@@ -104,7 +97,7 @@ export default function AppointmentsPage() {
     setError(null);
     setActingOnId(appointment.id);
     try {
-      await api.cancelAppointment(token, appointment.id);
+      await api.cancelAppointment(appointment.id);
       loadAll();
     } catch (err) {
       setError(describeApiError(err));
@@ -114,14 +107,12 @@ export default function AppointmentsPage() {
   }
 
   async function handleConfirm(appointment: Appointment) {
-    const token = getToken();
-    if (!token) return;
     if (!window.confirm("Bu randevu onaylandı olarak işaretlensin mi?")) return;
 
     setError(null);
     setActingOnId(appointment.id);
     try {
-      await api.confirmAppointment(token, appointment.id);
+      await api.confirmAppointment(appointment.id);
       loadAll();
     } catch (err) {
       setError(describeApiError(err));
@@ -131,14 +122,12 @@ export default function AppointmentsPage() {
   }
 
   async function handleComplete(appointment: Appointment) {
-    const token = getToken();
-    if (!token) return;
     if (!window.confirm("Bu randevu tamamlandı olarak işaretlensin mi?")) return;
 
     setError(null);
     setActingOnId(appointment.id);
     try {
-      await api.completeAppointment(token, appointment.id);
+      await api.completeAppointment(appointment.id);
       loadAll();
     } catch (err) {
       setError(describeApiError(err));
@@ -148,14 +137,12 @@ export default function AppointmentsPage() {
   }
 
   async function handleNoShow(appointment: Appointment) {
-    const token = getToken();
-    if (!token) return;
     if (!window.confirm("Bu randevu 'gelmedi' olarak işaretlensin mi?")) return;
 
     setError(null);
     setActingOnId(appointment.id);
     try {
-      await api.markAppointmentNoShow(token, appointment.id);
+      await api.markAppointmentNoShow(appointment.id);
       loadAll();
     } catch (err) {
       setError(describeApiError(err));
@@ -180,7 +167,6 @@ export default function AppointmentsPage() {
 
       {activeForm?.type === "create" && (
         <NewAppointmentForm
-          token={getToken() ?? ""}
           staffMembers={staffMembers}
           services={services}
           customers={customers}
@@ -191,7 +177,6 @@ export default function AppointmentsPage() {
 
       {activeForm?.type === "reschedule" && (
         <RescheduleForm
-          token={getToken() ?? ""}
           appointment={activeForm.appointment}
           staffMembers={staffMembers}
           services={services}

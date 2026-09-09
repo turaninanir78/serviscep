@@ -4,7 +4,6 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import { api } from "@/lib/api";
-import { setToken } from "@/lib/auth";
 import { describeApiError } from "@/lib/errors";
 
 export default function LoginPage() {
@@ -19,8 +18,7 @@ export default function LoginPage() {
     setError(null);
     setSubmitting(true);
     try {
-      const { access_token } = await api.login(email, password);
-      setToken(access_token);
+      await api.login(email, password);
       router.push("/appointments");
     } catch (err) {
       setError(describeApiError(err));

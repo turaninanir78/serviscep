@@ -19,7 +19,6 @@ function localDateString(iso: string): string {
 }
 
 interface RescheduleFormProps {
-  token: string;
   appointment: Appointment;
   staffMembers: StaffMember[];
   services: Service[];
@@ -29,7 +28,6 @@ interface RescheduleFormProps {
 }
 
 export default function RescheduleForm({
-  token,
   appointment,
   staffMembers,
   services,
@@ -54,7 +52,7 @@ export default function RescheduleForm({
     setSlotsError(null);
     setSelectedSlot(null);
     api
-      .getAvailableSlots(token, appointment.staff_id, appointment.service_id, date)
+      .getAvailableSlots(appointment.staff_id, appointment.service_id, date)
       .then((res) => setSlots(res.slots))
       .catch((err) => {
         setSlots(null);
@@ -74,7 +72,7 @@ export default function RescheduleForm({
     setFormError(null);
     setSubmitting(true);
     try {
-      await api.rescheduleAppointment(token, appointment.id, { start_at: selectedSlot });
+      await api.rescheduleAppointment(appointment.id, { start_at: selectedSlot });
       onRescheduled();
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {

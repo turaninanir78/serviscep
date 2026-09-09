@@ -3,7 +3,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 
 import { api } from "@/lib/api";
-import { getToken } from "@/lib/auth";
 import { describeApiError } from "@/lib/errors";
 import type { Service } from "@/lib/types";
 
@@ -17,28 +16,24 @@ export default function ServicesPage() {
   const [submitting, setSubmitting] = useState(false);
   const [togglingId, setTogglingId] = useState<number | null>(null);
 
-  function loadServices(token: string) {
+  function loadServices() {
     api
-      .getServices(token)
+      .getServices()
       .then(setServices)
       .catch((err) => setError(describeApiError(err)));
   }
 
   useEffect(() => {
-    const token = getToken();
-    if (!token) return;
-    loadServices(token);
+    loadServices();
   }, []);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    const token = getToken();
-    if (!token) return;
 
     setError(null);
     setSubmitting(true);
     try {
-      await api.createService(token, {
+      await api.createService({
         name,
         duration_minutes: Number(duration),
         price: price ? Number(price) : undefined,
@@ -48,7 +43,7 @@ export default function ServicesPage() {
       setDuration("");
       setPrice("");
       setBuffer("");
-      loadServices(token);
+      loadServices();
     } catch (err) {
       setError(describeApiError(err));
     } finally {
@@ -57,14 +52,11 @@ export default function ServicesPage() {
   }
 
   async function handleToggle(service: Service) {
-    const token = getToken();
-    if (!token) return;
-
     setError(null);
     setTogglingId(service.id);
     try {
-      await api.updateService(token, service.id, { is_active: !service.is_active });
-      loadServices(token);
+      await api.updateService(service.id, { is_active: !service.is_active });
+      loadServices();
     } catch (err) {
       setError(describeApiError(err));
     } finally {

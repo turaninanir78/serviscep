@@ -3,19 +3,31 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-import { getToken } from "@/lib/auth";
+import { api } from "@/lib/api";
 
 // Bu route sadece yonlendirme yapar - gercek panel ana ekrani /appointments,
-// gercek auth dogrulamasi ise (app)/layout.tsx'teki guard'da yapiliyor.
-// Token localStorage'da var gorunse bile gecersiz/suresi dolmus olabilir;
-// bu durumda kullanici /appointments'a gider ama oradaki guard onu tekrar
-// /login'e atar.
+// gercek auth dogrulamasi ise (app)/layout.tsx'teki guard'da yapiliyor. Auth
+// httpOnly cookie ile tasindigi icin JS token'in var olup olmadigini
+// okuyamaz - tek yol, cookie'yi otomatik gonderen bu istegin sonucuna
+// bakmak: basarili -> girilmis, 401 -> girilmemis.
 export default function Home() {
   const router = useRouter();
 
   useEffect(() => {
-    const token = getToken();
-    router.replace(token ? "/appointments" : "/login");
+    let cancelled = false;
+
+    api
+      .getMyTenant()
+      .then(() => {
+        if (!cancelled) router.replace("/appointments");
+      })
+      .catch(() => {
+        if (!cancelled) router.replace("/login");
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   return (

@@ -14,7 +14,7 @@ import urllib.request
 
 from app.db import SessionLocal
 from app.models import Customer, Service, StaffMember, Tenant
-from app.security import create_access_token
+from app.security import ACCESS_TOKEN_COOKIE_NAME, create_access_token
 
 BASE_URL = "http://localhost:8000"
 
@@ -58,7 +58,9 @@ def _post_appointment(
         data=json.dumps(payload).encode(),
         method="POST",
         headers={
-            "Authorization": f"Bearer {token}",
+            # Auth artik httpOnly cookie ile tasiniyor (bkz. app/security.py) -
+            # Authorization header'i backend tarafindan artik okunmuyor.
+            "Cookie": f"{ACCESS_TOKEN_COOKIE_NAME}={token}",
             "Content-Type": "application/json",
         },
     )

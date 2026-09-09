@@ -32,28 +32,30 @@ async function extractErrorMessage(res: Response): Promise<string> {
   return `İstek başarısız oldu (HTTP ${res.status}).`;
 }
 
-async function request<T>(
-  path: string,
-  options: RequestInit = {},
-  token?: string | null,
-): Promise<T> {
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
   headers.set("Content-Type", "application/json");
-  if (token) headers.set("Authorization", `Bearer ${token}`);
 
-  const res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
+  // Auth artik httpOnly cookie ile tasiniyor - JS'in token'i okuyup
+  // Authorization header'ina eklemesi gerekmiyor (zaten okuyamaz). Tarayicinin
+  // cookie'yi otomatik eklemesi icin credentials: "include" sart, cunku
+  // frontend (localhost:3000) ve backend (localhost:8000) farkli origin'ler.
+  const res = await fetch(`${BASE_URL}${path}`, {
+    ...options,
+    headers,
+    credentials: "include",
+  });
 
   if (!res.ok) {
     throw new ApiError(res.status, await extractErrorMessage(res));
   }
 
-  if (res.status === 204) return undefined as T;
-  return (await res.json()) as T;
-}
-
-interface TokenResponse {
-  access_token: string;
-  token_type: string;
+  // 204'un yani sira login/register de artik govdesiz donuyor (token
+  // Set-Cookie header'iyla tasiniyor) - bos govdede res.json() bir
+  // SyntaxError firlatirdi, bu yuzden once metni kontrol ediyoruz.
+  const text = await res.text();
+  if (!text) return undefined as T;
+  return JSON.parse(text) as T;
 }
 
 export interface CreateStaffMemberInput {
@@ -96,91 +98,75 @@ export interface RescheduleAppointmentInput {
 
 export const api = {
   login: (email: string, password: string) =>
-    request<TokenResponse>("/auth/login", {
+    request<void>("/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     }),
 
   register: (tenantName: string, email: string, password: string) =>
-    request<TokenResponse>("/auth/register", {
+    request<void>("/auth/register", {
       method: "POST",
       body: JSON.stringify({ tenant_name: tenantName, email, password }),
     }),
 
-  getMyTenant: (token: string) => request<Tenant>("/tenants/me", {}, token),
+  logout: () => request<void>("/auth/logout", { method: "POST" }),
 
-  getAppointments: (token: string) => request<Appointment[]>("/appointments", {}, token),
+  getMyTenant: () => request<Tenant>("/tenants/me"),
 
-  createAppointment: (token: string, input: CreateAppointmentInput) =>
-    request<Appointment>(
-      "/appointments",
-      { method: "POST", body: JSON.stringify(input) },
-      token,
-    ),
+  getAppointments: () => request<Appointment[]>("/appointments"),
 
-  confirmAppointment: (token: string, id: number) =>
-    request<Appointment>(`/appointments/${id}/confirm`, { method: "POST" }, token),
+  createAppointment: (input: CreateAppointmentInput) =>
+    request<Appointment>("/appointments", { method: "POST", body: JSON.stringify(input) }),
 
-  cancelAppointment: (token: string, id: number) =>
-    request<Appointment>(`/appointments/${id}/cancel`, { method: "POST" }, token),
+  confirmAppointment: (id: number) =>
+    request<Appointment>(`/appointments/${id}/confirm`, { method: "POST" }),
 
-  completeAppointment: (token: string, id: number) =>
-    request<Appointment>(`/appointments/${id}/complete`, { method: "POST" }, token),
+  cancelAppointment: (id: number) =>
+    request<Appointment>(`/appointments/${id}/cancel`, { method: "POST" }),
 
-  markAppointmentNoShow: (token: string, id: number) =>
-    request<Appointment>(`/appointments/${id}/no-show`, { method: "POST" }, token),
+  completeAppointment: (id: number) =>
+    request<Appointment>(`/appointments/${id}/complete`, { method: "POST" }),
 
-  rescheduleAppointment: (token: string, id: number, input: RescheduleAppointmentInput) =>
-    request<Appointment>(
-      `/appointments/${id}`,
-      { method: "PATCH", body: JSON.stringify(input) },
-      token,
-    ),
+  markAppointmentNoShow: (id: number) =>
+    request<Appointment>(`/appointments/${id}/no-show`, { method: "POST" }),
 
-  getAvailableSlots: (token: string, staffId: number, serviceId: number, date: string) =>
+  rescheduleAppointment: (id: number, input: RescheduleAppointmentInput) =>
+    request<Appointment>(`/appointments/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
+
+  getAvailableSlots: (staffId: number, serviceId: number, date: string) =>
     request<AvailableSlotsResponse>(
       `/availability/slots?staff_id=${staffId}&service_id=${serviceId}&date=${date}`,
-      {},
-      token,
     ),
 
-  getCustomers: (token: string) => request<Customer[]>("/customers", {}, token),
+  getCustomers: () => request<Customer[]>("/customers"),
 
-  getServices: (token: string) => request<Service[]>("/services", {}, token),
+  getServices: () => request<Service[]>("/services"),
 
-  createService: (token: string, input: CreateServiceInput) =>
-    request<Service>("/services", { method: "POST", body: JSON.stringify(input) }, token),
+  createService: (input: CreateServiceInput) =>
+    request<Service>("/services", { method: "POST", body: JSON.stringify(input) }),
 
-  updateService: (token: string, id: number, input: UpdateServiceInput) =>
-    request<Service>(
-      `/services/${id}`,
-      { method: "PATCH", body: JSON.stringify(input) },
-      token,
-    ),
+  updateService: (id: number, input: UpdateServiceInput) =>
+    request<Service>(`/services/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
 
-  getStaffMembers: (token: string) => request<StaffMember[]>("/staff_members", {}, token),
+  getStaffMembers: () => request<StaffMember[]>("/staff_members"),
 
-  createStaffMember: (token: string, input: CreateStaffMemberInput) =>
-    request<StaffMember>(
-      "/staff_members",
-      { method: "POST", body: JSON.stringify(input) },
-      token,
-    ),
+  createStaffMember: (input: CreateStaffMemberInput) =>
+    request<StaffMember>("/staff_members", { method: "POST", body: JSON.stringify(input) }),
 
-  updateStaffMember: (token: string, id: number, input: UpdateStaffMemberInput) =>
-    request<StaffMember>(
-      `/staff_members/${id}`,
-      { method: "PATCH", body: JSON.stringify(input) },
-      token,
-    ),
+  updateStaffMember: (id: number, input: UpdateStaffMemberInput) =>
+    request<StaffMember>(`/staff_members/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
 
-  getAvailabilityRules: (token: string) =>
-    request<AvailabilityRule[]>("/availability_rules", {}, token),
+  getAvailabilityRules: () => request<AvailabilityRule[]>("/availability_rules"),
 
-  createAvailabilityRule: (token: string, input: CreateAvailabilityRuleInput) =>
-    request<AvailabilityRule>(
-      "/availability_rules",
-      { method: "POST", body: JSON.stringify(input) },
-      token,
-    ),
+  createAvailabilityRule: (input: CreateAvailabilityRuleInput) =>
+    request<AvailabilityRule>("/availability_rules", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
 };

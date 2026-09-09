@@ -3,7 +3,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 
 import { api } from "@/lib/api";
-import { getToken } from "@/lib/auth";
 import { describeApiError } from "@/lib/errors";
 import type { StaffMember } from "@/lib/types";
 
@@ -14,30 +13,26 @@ export default function StaffPage() {
   const [submitting, setSubmitting] = useState(false);
   const [togglingId, setTogglingId] = useState<number | null>(null);
 
-  function loadStaffMembers(token: string) {
+  function loadStaffMembers() {
     api
-      .getStaffMembers(token)
+      .getStaffMembers()
       .then(setStaffMembers)
       .catch((err) => setError(describeApiError(err)));
   }
 
   useEffect(() => {
-    const token = getToken();
-    if (!token) return;
-    loadStaffMembers(token);
+    loadStaffMembers();
   }, []);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    const token = getToken();
-    if (!token) return;
 
     setError(null);
     setSubmitting(true);
     try {
-      await api.createStaffMember(token, { name });
+      await api.createStaffMember({ name });
       setName("");
-      loadStaffMembers(token);
+      loadStaffMembers();
     } catch (err) {
       setError(describeApiError(err));
     } finally {
@@ -46,14 +41,11 @@ export default function StaffPage() {
   }
 
   async function handleToggle(staff: StaffMember) {
-    const token = getToken();
-    if (!token) return;
-
     setError(null);
     setTogglingId(staff.id);
     try {
-      await api.updateStaffMember(token, staff.id, { is_active: !staff.is_active });
-      loadStaffMembers(token);
+      await api.updateStaffMember(staff.id, { is_active: !staff.is_active });
+      loadStaffMembers();
     } catch (err) {
       setError(describeApiError(err));
     } finally {

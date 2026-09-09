@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 
 import { api } from "@/lib/api";
-import { getToken } from "@/lib/auth";
 import { describeApiError } from "@/lib/errors";
 import type { Customer } from "@/lib/types";
 
@@ -12,11 +11,8 @@ export default function CustomersPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const token = getToken();
-    if (!token) return;
-
     api
-      .getCustomers(token)
+      .getCustomers()
       .then(setCustomers)
       .catch((err) => setError(describeApiError(err)));
   }, []);

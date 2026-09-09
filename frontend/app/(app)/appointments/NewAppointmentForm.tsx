@@ -19,7 +19,6 @@ function formatSlotTime(iso: string): string {
 }
 
 interface NewAppointmentFormProps {
-  token: string;
   staffMembers: StaffMember[];
   services: Service[];
   customers: Customer[];
@@ -28,7 +27,6 @@ interface NewAppointmentFormProps {
 }
 
 export default function NewAppointmentForm({
-  token,
   staffMembers,
   services,
   customers,
@@ -62,7 +60,7 @@ export default function NewAppointmentForm({
     setSlotsError(null);
     setSelectedSlot(null);
     api
-      .getAvailableSlots(token, Number(staffId), Number(serviceId), date)
+      .getAvailableSlots(Number(staffId), Number(serviceId), date)
       .then((res) => setSlots(res.slots))
       .catch((err) => {
         setSlots(null);
@@ -97,7 +95,7 @@ export default function NewAppointmentForm({
     setFormError(null);
     setSubmitting(true);
     try {
-      await api.createAppointment(token, {
+      await api.createAppointment({
         staff_id: Number(staffId),
         service_id: Number(serviceId),
         customer_id: selectedCustomer.id,

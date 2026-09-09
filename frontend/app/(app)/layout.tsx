@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { api } from "@/lib/api";
-import { clearToken, getToken } from "@/lib/auth";
 
 const NAV_LINKS = [
   { href: "/appointments", label: "Randevular" },
@@ -21,20 +20,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [tenantName, setTenantName] = useState<string | null>(null);
 
   useEffect(() => {
-    const token = getToken();
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
-
     let cancelled = false;
 
-    // Panel icerigi, /tenants/me BASARIYLA donene kadar hic gosterilmez -
-    // token localStorage'da var gorunse bile gecersiz/suresi dolmus
-    // olabilir. Basarisiz olursa (401 dahil herhangi bir hata) token
-    // temizlenip /login'e yonlendirilir.
+    // Panel icerigi, /tenants/me BASARIYLA donene kadar hic gosterilmez.
+    // Auth artik httpOnly cookie ile tasindigi icin JS'in "token var mi"
+    // diye senkron bir on-kontrol yapmasi mumkun degil (cookie okunamaz) -
+    // tek yol, cookie'yi otomatik gonderen bu istegin basarili olup
+    // olmadigina bakmak. Basarisiz olursa (401 dahil herhangi bir hata)
+    // /login'e yonlendirilir.
     api
-      .getMyTenant(token)
+      .getMyTenant()
       .then((tenant) => {
         if (cancelled) return;
         setTenantName(tenant.name);
@@ -42,7 +37,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       })
       .catch(() => {
         if (cancelled) return;
-        clearToken();
         router.replace("/login");
       });
 
@@ -51,9 +45,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     };
   }, [router]);
 
-  function handleLogout() {
-    clearToken();
-    router.replace("/login");
+  async function handleLogout() {
+    try {
+      // Cookie httpOnly oldugu icin JS onu temizleyemez - backend'in
+      // Set-Cookie ile expire etmesi gerekir.
+      await api.logout();
+    } finally {
+      router.replace("/login");
+    }
   }
 
   if (!ready) {
