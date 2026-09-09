@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { api, ApiError } from "@/lib/api";
 import { describeApiError } from "@/lib/errors";
@@ -51,16 +51,14 @@ export default function NewAppointmentForm({
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  function loadSlots() {
-    if (!staffId || !serviceId || !date) {
-      setSlots(null);
-      return;
-    }
-    setSlotsLoading(true);
-    setSlotsError(null);
-    setSelectedSlot(null);
+  // Sadece agi cagirir, state'i SADECE .then/.catch/.finally icinde set eder
+  // (senkron degil) - boylece bu fonksiyon bir useEffect'e baglanirsa
+  // react-hooks/set-state-in-effect kuralini tetiklemez. "Reset" mantigi
+  // (spinner'i acma, eski hata/secimi temizleme) kasitli olarak burada
+  // DEGIL, cagiran event handler'da (refreshSlots) yapiliyor.
+  function loadSlots(nextStaffId: string, nextServiceId: string, nextDate: string) {
     api
-      .getAvailableSlots(Number(staffId), Number(serviceId), date)
+      .getAvailableSlots(Number(nextStaffId), Number(nextServiceId), nextDate)
       .then((res) => setSlots(res.slots))
       .catch((err) => {
         setSlots(null);
@@ -69,10 +67,35 @@ export default function NewAppointmentForm({
       .finally(() => setSlotsLoading(false));
   }
 
-  useEffect(() => {
-    loadSlots();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [staffId, serviceId, date]);
+  // staffId/serviceId/date SADECE kullanici etkilesimiyle (asagidaki
+  // onChange'ler + 409 sonrasi yeniden deneme) degisiyor - bu yuzden bir
+  // useEffect'le "degisikligi izlemek" yerine, degisikligi tetikleyen her
+  // yerden dogrudan cagriliyor.
+  function refreshSlots(nextStaffId: string, nextServiceId: string, nextDate: string) {
+    if (!nextStaffId || !nextServiceId || !nextDate) {
+      setSlots(null);
+      return;
+    }
+    setSlotsLoading(true);
+    setSlotsError(null);
+    setSelectedSlot(null);
+    loadSlots(nextStaffId, nextServiceId, nextDate);
+  }
+
+  function handleStaffChange(value: string) {
+    setStaffId(value);
+    refreshSlots(value, serviceId, date);
+  }
+
+  function handleServiceChange(value: string) {
+    setServiceId(value);
+    refreshSlots(staffId, value, date);
+  }
+
+  function handleDateChange(value: string) {
+    setDate(value);
+    refreshSlots(staffId, serviceId, value);
+  }
 
   const selectedService = activeServices.find((s) => String(s.id) === serviceId);
 
@@ -105,7 +128,7 @@ export default function NewAppointmentForm({
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         setFormError("Bu slot az önce başka biri tarafından alındı. Slot listesi yenilendi, lütfen başka bir saat seçin.");
-        loadSlots();
+        refreshSlots(staffId, serviceId, date);
       } else {
         setFormError(describeApiError(err));
       }
@@ -137,7 +160,7 @@ export default function NewAppointmentForm({
               <label className="block text-sm text-zinc-700 dark:text-zinc-300">Personel</label>
               <select
                 value={staffId}
-                onChange={(e) => setStaffId(e.target.value)}
+                onChange={(e) => handleStaffChange(e.target.value)}
                 className="rounded border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
               >
                 <option value="">Seçiniz</option>
@@ -153,7 +176,7 @@ export default function NewAppointmentForm({
               <label className="block text-sm text-zinc-700 dark:text-zinc-300">Hizmet</label>
               <select
                 value={serviceId}
-                onChange={(e) => setServiceId(e.target.value)}
+                onChange={(e) => handleServiceChange(e.target.value)}
                 className="rounded border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
               >
                 <option value="">Seçiniz</option>
@@ -170,7 +193,7 @@ export default function NewAppointmentForm({
               <input
                 type="date"
                 value={date}
-                onChange={(e) => setDate(e.target.value)}
+                onChange={(e) => handleDateChange(e.target.value)}
                 className="rounded border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
               />
             </div>

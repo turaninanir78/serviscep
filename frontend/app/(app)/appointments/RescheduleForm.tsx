@@ -41,18 +41,23 @@ export default function RescheduleForm({
 
   const [date, setDate] = useState(localDateString(appointment.start_at));
   const [slots, setSlots] = useState<string[] | null>(null);
-  const [slotsLoading, setSlotsLoading] = useState(false);
+  // Mount'ta hemen bir ilk yukleme baslatiyoruz (asagidaki useEffect), o
+  // yuzden baslangic degeri true - boylece effect'in kendisinin senkron
+  // setSlotsLoading(true) cagirmasina gerek kalmiyor (bkz. loadSlots).
+  const [slotsLoading, setSlotsLoading] = useState(true);
   const [slotsError, setSlotsError] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  function loadSlots() {
-    setSlotsLoading(true);
-    setSlotsError(null);
-    setSelectedSlot(null);
+  // Sadece agi cagirir, state'i SADECE .then/.catch/.finally icinde set eder
+  // (senkron degil) - boylece useEffect'in govdesi react-hooks/
+  // set-state-in-effect kuralini tetiklemez. "Reset" mantigi (spinner'i
+  // acma, eski hata/secimi temizleme) kasitli olarak burada DEGIL,
+  // cagiran yerde (refreshSlots) yapiliyor.
+  function loadSlots(forDate: string) {
     api
-      .getAvailableSlots(appointment.staff_id, appointment.service_id, date)
+      .getAvailableSlots(appointment.staff_id, appointment.service_id, forDate)
       .then((res) => setSlots(res.slots))
       .catch((err) => {
         setSlots(null);
@@ -61,10 +66,24 @@ export default function RescheduleForm({
       .finally(() => setSlotsLoading(false));
   }
 
+  function refreshSlots(forDate: string) {
+    setSlotsLoading(true);
+    setSlotsError(null);
+    setSelectedSlot(null);
+    loadSlots(forDate);
+  }
+
   useEffect(() => {
-    loadSlots();
+    // Sadece mount'ta, formun acildigi ilk tarih icin calisir - sonraki
+    // tarih degisiklikleri handleDateChange tarafindan tetikleniyor.
+    loadSlots(date);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [date]);
+  }, []);
+
+  function handleDateChange(value: string) {
+    setDate(value);
+    refreshSlots(value);
+  }
 
   async function handleSubmit() {
     if (!selectedSlot) return;
@@ -79,7 +98,7 @@ export default function RescheduleForm({
         setFormError(
           "Bu slot dolu. Slot listesi yenilendi, lütfen başka bir saat seçin.",
         );
-        loadSlots();
+        refreshSlots(date);
       } else {
         setFormError(describeApiError(err));
       }
@@ -115,7 +134,7 @@ export default function RescheduleForm({
         <input
           type="date"
           value={date}
-          onChange={(e) => setDate(e.target.value)}
+          onChange={(e) => handleDateChange(e.target.value)}
           className="rounded border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
         />
       </div>
