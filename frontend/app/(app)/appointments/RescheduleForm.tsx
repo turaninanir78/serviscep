@@ -49,22 +49,39 @@ export default function RescheduleForm({
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  function loadSlots() {
+  function loadSlots(ignoreRef?: { current: boolean }) {
     setSlotsLoading(true);
     setSlotsError(null);
     setSelectedSlot(null);
     api
       .getAvailableSlots(token, appointment.staff_id, appointment.service_id, date)
-      .then((res) => setSlots(res.slots))
-      .catch((err) => {
-        setSlots(null);
-        setSlotsError(describeApiError(err));
+      .then((res) => {
+        if (!ignoreRef?.current) setSlots(res.slots);
       })
-      .finally(() => setSlotsLoading(false));
+      .catch((err) => {
+        if (!ignoreRef?.current) {
+          setSlots(null);
+          setSlotsError(describeApiError(err));
+        }
+      })
+      .finally(() => {
+        if (!ignoreRef?.current) setSlotsLoading(false);
+      });
   }
 
   useEffect(() => {
-    loadSlots();
+    // loadSlots sets state synchronously at its start (loading indicator),
+    // so it must be called through a nested closure rather than directly in
+    // the effect body - see react-hooks/set-state-in-effect. The ignoreRef
+    // also guards against a stale response overwriting a newer one.
+    const ignoreRef = { current: false };
+    function run() {
+      loadSlots(ignoreRef);
+    }
+    run();
+    return () => {
+      ignoreRef.current = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date]);
 
