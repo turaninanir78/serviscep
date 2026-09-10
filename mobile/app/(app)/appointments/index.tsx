@@ -66,6 +66,14 @@ export default function AppointmentsScreen() {
     <View style={styles.container}>
       <NavRow active="appointments" />
 
+      <Pressable
+        style={styles.newButton}
+        testID="new-appointment-button"
+        onPress={() => router.push("/(app)/appointments/new")}
+      >
+        <Text style={styles.newButtonText}>+ Yeni Randevu</Text>
+      </Pressable>
+
       {error && (
         <Text style={styles.error} testID="appointments-error">
           {error}
@@ -115,6 +123,15 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fafafa" },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   emptyText: { color: "#71717a" },
+  newButton: {
+    backgroundColor: "#000",
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: "center",
+    marginHorizontal: 16,
+    marginTop: 12,
+  },
+  newButtonText: { color: "#fff", fontWeight: "600", fontSize: 14 },
   error: { color: "#dc2626", padding: 16 },
   row: {
     flexDirection: "row",
