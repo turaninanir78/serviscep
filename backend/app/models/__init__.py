@@ -33,12 +33,49 @@ class Tenant(Base):
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint(
+            "email IS NOT NULL OR phone IS NOT NULL", name="ck_users_email_or_phone_present"
+        ),
+    )
 
     id = Column(Integer, primary_key=True)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False)
-    email = Column(String(255), nullable=False, unique=True)
+    # Ikisi de nullable: kayit artik SADECE telefonla yapiliyor (email NULL
+    # baslar), email sonradan profil ekranindan dogrulanip eklenebilir. Eski
+    # (migration 0006 ONCESI) hesaplarin hepsinde email dolu, phone NULL -
+    # CHECK constraint sadece "en az biri dolu olsun" der, ikisi de nullable
+    # oldugu icin Postgres UNIQUE semantigi geregi (NULL'lar birbirinden
+    # farkli sayilir) ayni anda birden fazla NULL email/phone sorun cikarmaz.
+    email = Column(String(255), unique=True)
+    phone = Column(String(20), unique=True)
     password_hash = Column(String(255), nullable=False)
     role = Column(String(20), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class OtpCode(Base):
+    """Telefonla kayit (purpose="register_phone") ve profile e-posta ekleme
+    (purpose="profile_email") akislarinin ortak dogrulama-kodu tablosu.
+
+    `target`, dogrulanan sey (normalize edilmis E.164 telefon ya da e-posta)
+    - kod, gercek deger yerine hash'i olarak saklaniyor (app/security.py
+    hash_password/verify_password ile, sifrelerle ayni bcrypt mekanizmasi).
+    `user_id`, sadece profile_email icin doludur (hangi giris yapmis
+    kullanicinin istegi oldugunu dogrulamak icin) - register_phone icin NULL
+    (henuz bir User/Tenant yok).
+    """
+
+    __tablename__ = "otp_codes"
+
+    id = Column(Integer, primary_key=True)
+    purpose = Column(String(30), nullable=False)
+    target = Column(String(255), nullable=False)
+    code_hash = Column(String(255), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    attempts = Column(Integer, nullable=False, server_default="0")
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    consumed_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 

@@ -10,6 +10,7 @@ const STATUS_MESSAGES: Record<number, string> = {
   404: "Aradığınız kayıt bulunamadı.",
   409: "Bu işlem mevcut bir kayıtla çakışıyor.",
   422: "Girilen bilgiler geçersiz. Lütfen kontrol edin.",
+  429: "Çok fazla deneme yapıldı. Lütfen biraz bekleyip tekrar deneyin.",
 };
 
 const FALLBACK_MESSAGE = "Bir şeyler ters gitti, tekrar deneyin.";

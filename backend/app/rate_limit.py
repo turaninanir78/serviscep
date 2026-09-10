@@ -55,6 +55,17 @@ RATE_LIMIT_ENABLED = (
 AUTH_LOGIN_RATE_LIMIT = _env_or_default("AUTH_LOGIN_RATE_LIMIT", "5/minute")
 AUTH_REGISTER_RATE_LIMIT = _env_or_default("AUTH_REGISTER_RATE_LIMIT", "10/hour")
 
+# OTP kodu isteme (SMS/e-posta "gonderimi") - kodun kendisindeki
+# resend-cooldown'a (bkz. app/otp.py) EK bir IP bazli koruma; birinin baska
+# birinin telefonuna/e-postasina spam OTP gonderttirmesini (masraf/rahatsizlik)
+# zorlastirir.
+OTP_REQUEST_RATE_LIMIT = _env_or_default("OTP_REQUEST_RATE_LIMIT", "5/hour")
+# OTP kodu dogrulama - kod basina deneme sayisi zaten app/otp.py::OTP_MAX_ATTEMPTS
+# ile sinirli, bu IP bazli ek limit farkli hedeflere karsi kaba-kuvvet
+# denemesini (bir IP'den art arda cok sayida telefon/e-posta icin kod
+# deneme) yavaslatir.
+OTP_VERIFY_RATE_LIMIT = _env_or_default("OTP_VERIFY_RATE_LIMIT", "10/minute")
+
 limiter = Limiter(key_func=get_remote_address, enabled=RATE_LIMIT_ENABLED)
 
 

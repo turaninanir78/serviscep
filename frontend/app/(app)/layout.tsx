@@ -12,6 +12,7 @@ const NAV_LINKS = [
   { href: "/services", label: "Hizmetler" },
   { href: "/availability", label: "Çalışma Saatleri" },
   { href: "/customers", label: "Müşteriler" },
+  { href: "/profile", label: "Hesabım" },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

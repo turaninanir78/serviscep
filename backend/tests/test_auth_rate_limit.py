@@ -53,7 +53,7 @@ REGISTER_LIMIT_COUNT = _parse_limit_count(AUTH_REGISTER_RATE_LIMIT)
 
 def _attempt_login(email: str) -> int:
     res = requests.post(
-        f"{BASE_URL}/auth/login", json={"email": email, "password": "wrong-password"}
+        f"{BASE_URL}/auth/login", json={"email_or_phone": email, "password": "wrong-password"}
     )
     return res.status_code
 
@@ -88,7 +88,7 @@ def test_login_rate_limit_error_message_is_explicit():
         _attempt_login(email)
 
     res = requests.post(
-        f"{BASE_URL}/auth/login", json={"email": email, "password": "wrong-password"}
+        f"{BASE_URL}/auth/login", json={"email_or_phone": email, "password": "wrong-password"}
     )
     assert res.status_code == 429
     assert res.json()["detail"] == "Too many attempts. Please try again later."

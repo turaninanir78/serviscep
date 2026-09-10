@@ -59,7 +59,8 @@ def test_mobile_login_returns_token_in_body_not_cookie():
         )
 
         res = requests.post(
-            f"{BASE_URL}/auth/mobile/login", json={"email": email, "password": "correct-pw"}
+            f"{BASE_URL}/auth/mobile/login",
+            json={"email_or_phone": email, "password": "correct-pw"},
         )
         assert res.status_code == 200
         body = res.json()
@@ -78,7 +79,7 @@ def test_mobile_login_with_wrong_password_returns_401_and_no_token():
         )
 
         res = requests.post(
-            f"{BASE_URL}/auth/mobile/login", json={"email": email, "password": "wrong-pw"}
+            f"{BASE_URL}/auth/mobile/login", json={"email_or_phone": email, "password": "wrong-pw"}
         )
         assert res.status_code == 401
         assert "access_token" not in res.text

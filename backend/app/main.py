@@ -1,3 +1,4 @@
+import logging
 import os
 
 import psycopg
@@ -18,6 +19,12 @@ from app.api import (
     webhooks,
 )
 from app.rate_limit import limiter, rate_limit_exceeded_handler
+
+# Uvicorn varsayilan olarak SADECE kendi ("uvicorn"/"uvicorn.access")
+# logger'larini yapilandiriyor - "app.*" logger'lari (webhooks, notifications
+# vb.) root logger'in varsayilan WARNING seviyesine dusup INFO satirlari
+# (orn. MOCK SMS/EMAIL - bkz. app/notifications.py) hic gorunmez olurdu.
+logging.basicConfig(level=logging.INFO)
 
 app = FastAPI()
 

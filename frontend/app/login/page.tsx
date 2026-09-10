@@ -8,7 +8,7 @@ import { describeApiError } from "@/lib/errors";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [emailOrPhone, setEmailOrPhone] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -18,7 +18,7 @@ export default function LoginPage() {
     setError(null);
     setSubmitting(true);
     try {
-      await api.login(email, password);
+      await api.login(emailOrPhone, password);
       router.push("/appointments");
     } catch (err) {
       setError(describeApiError(err));
@@ -35,16 +35,16 @@ export default function LoginPage() {
         <h1 className="text-xl font-semibold text-black dark:text-zinc-50">Giriş Yap</h1>
 
         <div className="space-y-1">
-          <label htmlFor="email" className="block text-sm text-zinc-700 dark:text-zinc-300">
-            E-posta
+          <label htmlFor="emailOrPhone" className="block text-sm text-zinc-700 dark:text-zinc-300">
+            E-posta veya Telefon
           </label>
           <input
-            id="email"
-            type="email"
+            id="emailOrPhone"
+            type="text"
             required
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="username"
+            value={emailOrPhone}
+            onChange={(e) => setEmailOrPhone(e.target.value)}
             className="w-full rounded border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
           />
         </div>

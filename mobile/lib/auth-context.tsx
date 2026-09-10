@@ -14,8 +14,16 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   tenantName: string | null;
   tenantTimezone: string;
-  login: (email: string, password: string) => Promise<void>;
-  register: (tenantName: string, email: string, password: string) => Promise<void>;
+  login: (emailOrPhone: string, password: string) => Promise<void>;
+  // Telefon+OTP kaydinin SON adimi - ilk iki adim (kod isteme/dogrulama)
+  // henuz bir hesap/oturum olusturmadigi icin auth state'i etkilemiyor,
+  // ekranlar bunlari dogrudan api.requestRegisterOtp/verifyRegisterOtp ile
+  // cagiriyor (bkz. app/register.tsx).
+  completeRegistration: (
+    registrationToken: string,
+    tenantName: string,
+    password: string,
+  ) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -57,18 +65,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  async function login(email: string, password: string): Promise<void> {
-    const { access_token } = await api.login(email, password);
+  async function login(emailOrPhone: string, password: string): Promise<void> {
+    const { access_token } = await api.login(emailOrPhone, password);
     await setToken(access_token);
     await refreshTenant();
   }
 
-  async function register(
+  async function completeRegistration(
+    registrationToken: string,
     tenantNameInput: string,
-    email: string,
     password: string,
   ): Promise<void> {
-    const { access_token } = await api.register(tenantNameInput, email, password);
+    const { access_token } = await api.completeRegister(
+      registrationToken,
+      tenantNameInput,
+      password,
+    );
     await setToken(access_token);
     await refreshTenant();
   }
@@ -85,7 +97,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ isLoading, isAuthenticated, tenantName, tenantTimezone, login, register, logout }}
+      value={{
+        isLoading,
+        isAuthenticated,
+        tenantName,
+        tenantTimezone,
+        login,
+        completeRegistration,
+        logout,
+      }}
     >
       {children}
     </AuthContext.Provider>

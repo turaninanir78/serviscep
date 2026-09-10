@@ -4,6 +4,14 @@ export interface Tenant {
   timezone: string;
 }
 
+export interface User {
+  id: number;
+  tenant_id: number;
+  email: string | null;
+  phone: string | null;
+  role: string;
+}
+
 export interface Appointment {
   id: number;
   tenant_id: number;
