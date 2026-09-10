@@ -50,3 +50,13 @@ export interface AvailableSlotsResponse {
   service_id: number;
   slots: string[];
 }
+
+export interface AvailabilityRule {
+  id: number;
+  tenant_id: number;
+  staff_id: number;
+  // 0=Pazartesi ... 6=Pazar (backend'deki date.weekday() ile ayni kodlama)
+  weekday: number;
+  start_time: string;
+  end_time: string;
+}

@@ -5,9 +5,14 @@ const LINKS = [
   { href: "/(app)/appointments" as const, label: "Randevular" },
   { href: "/(app)/staff" as const, label: "Personel" },
   { href: "/(app)/services" as const, label: "Hizmetler" },
+  { href: "/(app)/availability" as const, label: "Müsaitlik" },
 ];
 
-export function NavRow({ active }: { active: "appointments" | "staff" | "services" }) {
+export function NavRow({
+  active,
+}: {
+  active: "appointments" | "staff" | "services" | "availability";
+}) {
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.row}>
       {LINKS.map((link) => {

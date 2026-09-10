@@ -1,6 +1,7 @@
 import { getToken } from "./storage";
 import type {
   Appointment,
+  AvailabilityRule,
   AvailableSlotsResponse,
   Customer,
   Service,
@@ -78,6 +79,19 @@ export interface CreateCustomerInput {
   display_name?: string | null;
 }
 
+export interface CreateAvailabilityRuleInput {
+  staff_id: number;
+  weekday: number;
+  start_time: string;
+  end_time: string;
+}
+
+export interface UpdateAvailabilityRuleInput {
+  weekday?: number;
+  start_time?: string;
+  end_time?: string;
+}
+
 export const api = {
   login: (email: string, password: string) =>
     request<MobileTokenResponse>("/auth/mobile/login", {
@@ -131,4 +145,18 @@ export const api = {
     request<AvailableSlotsResponse>(
       `/availability/slots?staff_id=${staffId}&service_id=${serviceId}&date=${date}`,
     ),
+
+  getAvailabilityRules: () => request<AvailabilityRule[]>("/availability_rules"),
+
+  createAvailabilityRule: (input: CreateAvailabilityRuleInput) =>
+    request<AvailabilityRule>("/availability_rules", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+
+  updateAvailabilityRule: (id: number, input: UpdateAvailabilityRuleInput) =>
+    request<AvailabilityRule>(`/availability_rules/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
 };
