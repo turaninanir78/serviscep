@@ -1,0 +1,116 @@
+import { getToken } from "./storage";
+import type {
+  Appointment,
+  AvailableSlotsResponse,
+  Customer,
+  Service,
+  StaffMember,
+  Tenant,
+} from "./types";
+
+// Android emulator'da "localhost" emulator'in KENDI loopback'i olur, host
+// makineye ulasmak icin 10.0.2.2 gerekir - iOS simulator ve web'de ise
+// localhost dogrudan calisir. Gercek cihaz/farkli ag icin
+// EXPO_PUBLIC_BACKEND_URL .env ile override edilebilir (bkz. .env.example).
+const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
+
+export class ApiError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+async function extractErrorMessage(res: Response): Promise<string> {
+  try {
+    const body = await res.json();
+    if (typeof body.detail === "string") return body.detail;
+    if (Array.isArray(body.detail)) {
+      return body.detail.map((item: { msg?: string }) => item.msg).join(", ");
+    }
+  } catch {
+    // govde JSON degil veya bos - genel mesaja dus
+  }
+  return `İstek başarısız oldu (HTTP ${res.status}).`;
+}
+
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const headers = new Headers(options.headers);
+  headers.set("Content-Type", "application/json");
+
+  // Web panelinin aksine (httpOnly cookie otomatik gonderilir), mobil'de
+  // token'i biz okuyup Authorization header'ina EKLEMEMIZ gerekiyor -
+  // native app'lerin tarayici cookie jar'i yok.
+  const token = await getToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  const res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
+
+  if (!res.ok) {
+    throw new ApiError(res.status, await extractErrorMessage(res));
+  }
+
+  const text = await res.text();
+  if (!text) return undefined as T;
+  return JSON.parse(text) as T;
+}
+
+interface MobileTokenResponse {
+  access_token: string;
+  token_type: string;
+}
+
+export interface RescheduleAppointmentInput {
+  start_at: string;
+}
+
+export const api = {
+  login: (email: string, password: string) =>
+    request<MobileTokenResponse>("/auth/mobile/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    }),
+
+  register: (tenantName: string, email: string, password: string) =>
+    request<MobileTokenResponse>("/auth/mobile/register", {
+      method: "POST",
+      body: JSON.stringify({ tenant_name: tenantName, email, password }),
+    }),
+
+  getMyTenant: () => request<Tenant>("/tenants/me"),
+
+  getAppointments: () => request<Appointment[]>("/appointments"),
+
+  getAppointment: (id: number) => request<Appointment>(`/appointments/${id}`),
+
+  getCustomers: () => request<Customer[]>("/customers"),
+
+  getServices: () => request<Service[]>("/services"),
+
+  getStaffMembers: () => request<StaffMember[]>("/staff_members"),
+
+  confirmAppointment: (id: number) =>
+    request<Appointment>(`/appointments/${id}/confirm`, { method: "POST" }),
+
+  cancelAppointment: (id: number) =>
+    request<Appointment>(`/appointments/${id}/cancel`, { method: "POST" }),
+
+  completeAppointment: (id: number) =>
+    request<Appointment>(`/appointments/${id}/complete`, { method: "POST" }),
+
+  markAppointmentNoShow: (id: number) =>
+    request<Appointment>(`/appointments/${id}/no-show`, { method: "POST" }),
+
+  rescheduleAppointment: (id: number, input: RescheduleAppointmentInput) =>
+    request<Appointment>(`/appointments/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
+
+  getAvailableSlots: (staffId: number, serviceId: number, date: string) =>
+    request<AvailableSlotsResponse>(
+      `/availability/slots?staff_id=${staffId}&service_id=${serviceId}&date=${date}`,
+    ),
+};
