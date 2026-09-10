@@ -8,6 +8,7 @@ dönülür - aksi halde Meta aynı webhook'u tekrar tekrar dener.
 """
 import hashlib
 import hmac
+import json
 import logging
 import os
 
@@ -50,12 +51,28 @@ def _verify_signature(raw_body: bytes, signature_header: str | None) -> bool:
     return hmac.compare_digest(expected, provided)
 
 
+def _fallback_message_key(tenant_id: int, from_number: str, message: dict) -> str:
+    """Gercek Meta trafiginde `id` alani her zaman bulunur, ama sema bunu
+    zorunlu kilmiyor (bkz. Conversation.wa_message_id - NULLABLE). Bu alan
+    eksikse, Meta'nin bir tekrar denemesinde AYNEN koruyacagi alanlardan
+    (tenant + gonderen numara + timestamp + metin) deterministik bir
+    yedek anahtar turetiyoruz - boylece wa_message_id UNIQUE constraint'i
+    id'siz mesajlar icin de idempotency saglar. Gercek wa_message_id'lerle
+    (hep "wamid." ile baslar) cakismayi engellemek icin ayri bir on ek
+    kullaniliyor.
+    """
+    text = message.get("text", {}).get("body")
+    raw = f"{tenant_id}:{from_number}:{message.get('timestamp')}:{text}"
+    digest = hashlib.sha256(raw.encode()).hexdigest()
+    return f"fallback:{digest}"
+
+
 def _store_inbound_message(db: Session, tenant: Tenant, message: dict, contacts: dict) -> None:
     from_number = message.get("from")
     if not from_number:
         return
 
-    wa_message_id = message.get("id")
+    wa_message_id = message.get("id") or _fallback_message_key(tenant.id, from_number, message)
     message_text = message.get("text", {}).get("body")
 
     customer = (
@@ -123,7 +140,15 @@ async def receive_webhook(
     if not _verify_signature(raw_body, x_hub_signature_256):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid signature")
 
-    payload = await request.json()
+    try:
+        payload = json.loads(raw_body)
+    except json.JSONDecodeError:
+        # Bozuk/bos govde de dosyanin basindaki "her zaman 200" kuralina
+        # tabi - islenecek bir sey yok ama 500 donup Meta'yi ayni bozuk
+        # istegi sonsuza kadar tekrar etmeye itmemeliyiz.
+        logger.warning("Gecersiz JSON govdesi, islenmeden atlaniyor")
+        return {"status": "ok"}
+
     _process_whatsapp_payload(db, payload)
 
     # Meta'nin kurali: eslesme olmasa/hata olsa bile HER ZAMAN 200 - aksi
