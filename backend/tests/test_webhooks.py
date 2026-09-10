@@ -9,6 +9,8 @@ import hashlib
 import hmac
 import json
 import os
+import threading
+import time
 import urllib.error
 import urllib.request
 
@@ -363,6 +365,40 @@ def test_server_remains_usable_after_malformed_request(tenant_with_whatsapp):
         db.close()
 
 
+# --- POST /webhooks/whatsapp - gecerli JSON ama obje degil ---
+#
+# json.loads() bir dict yerine liste/null/string/sayi da dondurebilir -
+# _process_whatsapp_payload'un payload.get(...) cagrisi bu durumda
+# AttributeError'a (list/str/int/None'da .get() yok) yol acip 500
+# donduruyordu. receive_webhook artik parse'tan sonra isinstance(payload,
+# dict) kontrolu yapip degilse islenmeden 200 donuyor - bozuk JSON'la ayni
+# felsefe.
+
+
+def test_valid_json_array_body_does_not_return_500():
+    body = b"[]"
+    status_code, _ = _post_webhook_raw(body, _sign(body))
+    assert status_code == 200
+
+
+def test_valid_json_null_body_does_not_return_500():
+    body = b"null"
+    status_code, _ = _post_webhook_raw(body, _sign(body))
+    assert status_code == 200
+
+
+def test_valid_json_string_body_does_not_return_500():
+    body = b'"just a string"'
+    status_code, _ = _post_webhook_raw(body, _sign(body))
+    assert status_code == 200
+
+
+def test_valid_json_number_body_does_not_return_500():
+    body = b"42"
+    status_code, _ = _post_webhook_raw(body, _sign(body))
+    assert status_code == 200
+
+
 # --- POST /webhooks/whatsapp - govde boyutu ---
 
 
@@ -451,3 +487,64 @@ def test_duplicate_delivery_without_wa_message_id_is_not_deduplicated(tenant_wit
         assert len(conversations) == 1
     finally:
         db.close()
+
+
+# --- POST /webhooks/whatsapp - eszamanli yeni musteri olusturma ---
+#
+# Gercek concurrency'i (iki thread'in tam ayni anda calismasi) sirali HTTP
+# istekleriyle guvenilir bicimde tetiklemek zor - ikinci istek genelde
+# ilkinin commit'ini zaten gormus olur, hicbir INSERT catismasi yasanmaz.
+# Bunun yerine Postgres'in kendi transaction izolasyonunu kullanip
+# IntegrityError'i deterministik olarak tetikliyoruz: bu thread ayni
+# (tenant, whatsapp_number) icin bir Customer satirini ACIK bir
+# transaction'da (flush edip commit ETMEDEN) tutarken, webhook istegi ayri
+# bir thread'de gonderiliyor. Webhook'un kendi INSERT'i bu satirin serbest
+# kalmasini beklemek zorunda kalir (Postgres UNIQUE index davranisi); biz
+# ana thread'de commit edince, webhook'un INSERT'i gercek bir
+# IntegrityError'a donusur - _store_inbound_message bunu rollback+re-query
+# ile idempotent sekilde ele almali (500 degil, 200 ve TEK Customer satiri).
+
+
+def test_concurrent_new_customer_creation_does_not_return_500(tenant_with_whatsapp):
+    db, tenant_id = tenant_with_whatsapp
+    phone_number = "905551110012"
+
+    holder_db = SessionLocal()
+    holder_db.add(Customer(tenant_id=tenant_id, whatsapp_number=phone_number))
+    holder_db.flush()  # satiri ekler ama commit etmez - webhook'un INSERT'i buna kilitlenir
+
+    result: dict = {}
+
+    def send_webhook():
+        payload = _message_payload(
+            "1234567890123", phone_number, "Eszamanli musteri testi", "wamid.RACETEST1"
+        )
+        body = json.dumps(payload).encode()
+        result["status"], _ = _post_webhook(body, _sign(body))
+
+    thread = threading.Thread(target=send_webhook)
+    thread.start()
+    time.sleep(1)  # webhook'un SELECT+INSERT'ini baslatip kilide takilmasi icin sure taniyoruz
+    holder_db.commit()  # simdi webhook'un bekleyen INSERT'i IntegrityError'a donusur
+    thread.join(timeout=15)
+
+    try:
+        assert not thread.is_alive(), "webhook istegi zaman asimina ugradi"
+        assert result.get("status") == 200
+
+        customers = (
+            db.query(Customer)
+            .filter(Customer.tenant_id == tenant_id, Customer.whatsapp_number == phone_number)
+            .all()
+        )
+        assert len(customers) == 1
+
+        conversations = (
+            db.query(Conversation)
+            .filter(Conversation.customer_id == customers[0].id)
+            .all()
+        )
+        assert len(conversations) == 1
+        assert conversations[0].wa_message_id == "wamid.RACETEST1"
+    finally:
+        holder_db.close()

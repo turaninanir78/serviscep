@@ -86,7 +86,32 @@ def _store_inbound_message(db: Session, tenant: Tenant, message: dict, contacts:
             tenant_id=tenant.id, whatsapp_number=from_number, display_name=display_name
         )
         db.add(customer)
-        db.flush()
+        try:
+            db.flush()
+        except IntegrityError:
+            # Ayni yeni telefon numarasiyla eszamanli iki webhook, ikisi de
+            # yukarideki sorguda customer'i None bulup ayni anda yeni
+            # Customer eklemeye calisirsa: (tenant_id, whatsapp_number)
+            # UNIQUE constraint'i (bkz. migration
+            # uq_customers_tenant_id_whatsapp_number) kaybeden istegin
+            # flush'inda IntegrityError firlatir. wa_message_id
+            # idempotency mantigiyla tutarli olarak: rollback edip diger
+            # istegin az once olusturdugu kaydi tekrar sorguluyoruz.
+            db.rollback()
+            customer = (
+                db.query(Customer)
+                .filter(Customer.tenant_id == tenant.id, Customer.whatsapp_number == from_number)
+                .first()
+            )
+            if customer is None:
+                # Cok dusuk ihtimalli, farkli bir hata - islemeye devam
+                # edecek bir musteri yok, sessizce cik.
+                logger.warning(
+                    "Musteri flush'ta IntegrityError sonrasi bulunamadi: tenant=%s, from=%s",
+                    tenant.id,
+                    from_number,
+                )
+                return
 
     db.add(
         Conversation(
@@ -147,6 +172,16 @@ async def receive_webhook(
         # tabi - islenecek bir sey yok ama 500 donup Meta'yi ayni bozuk
         # istegi sonsuza kadar tekrar etmeye itmemeliyiz.
         logger.warning("Gecersiz JSON govdesi, islenmeden atlaniyor")
+        return {"status": "ok"}
+
+    if not isinstance(payload, dict):
+        # Gecerli JSON ama beklenen sekilde degil (liste, null, string,
+        # sayi...) - _process_whatsapp_payload'un .get() cagrilari bir
+        # dict varsayiyor, bozuk JSON ile ayni "islenecek bir sey yok,
+        # 200 don" mantigina tabi olmali.
+        logger.warning(
+            "JSON govdesi obje degil (%s turu), islenmeden atlaniyor", type(payload).__name__
+        )
         return {"status": "ok"}
 
     _process_whatsapp_payload(db, payload)
