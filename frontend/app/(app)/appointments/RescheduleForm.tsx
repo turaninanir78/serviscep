@@ -3,26 +3,16 @@
 import { useEffect, useState } from "react";
 
 import { api, ApiError } from "@/lib/api";
+import { dateStringInTimezone, formatSlotTime } from "@/lib/dates";
 import { describeApiError } from "@/lib/errors";
 import type { Appointment, Customer, Service, StaffMember } from "@/lib/types";
-
-function formatSlotTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
-}
-
-function localDateString(iso: string): string {
-  const d = new Date(iso);
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
 
 interface RescheduleFormProps {
   appointment: Appointment;
   staffMembers: StaffMember[];
   services: Service[];
   customers: Customer[];
+  timezone: string;
   onRescheduled: () => void;
   onCancel: () => void;
 }
@@ -32,6 +22,7 @@ export default function RescheduleForm({
   staffMembers,
   services,
   customers,
+  timezone,
   onRescheduled,
   onCancel,
 }: RescheduleFormProps) {
@@ -39,7 +30,7 @@ export default function RescheduleForm({
   const service = services.find((s) => s.id === appointment.service_id);
   const customer = customers.find((c) => c.id === appointment.customer_id);
 
-  const [date, setDate] = useState(localDateString(appointment.start_at));
+  const [date, setDate] = useState(dateStringInTimezone(appointment.start_at, timezone));
   const [slots, setSlots] = useState<string[] | null>(null);
   // Mount'ta hemen bir ilk yukleme baslatiyoruz (asagidaki useEffect), o
   // yuzden baslangic degeri true - boylece effect'in kendisinin senkron
@@ -160,7 +151,7 @@ export default function RescheduleForm({
                     : "border-zinc-300 text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
                 }`}
               >
-                {formatSlotTime(slot)}
+                {formatSlotTime(slot, timezone)}
               </button>
             ))}
           </div>

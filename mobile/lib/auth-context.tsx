@@ -3,10 +3,17 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { api } from "./api";
 import { clearToken, getToken, setToken } from "./storage";
 
+// Backend'in Tenant.timezone kolonuyla ayni varsayilan (bkz.
+// backend/app/models - server_default="Europe/Istanbul") - sadece
+// authenticate olmadan ONCEKI kisa an icin bir baslangic degeri, gercek
+// deger her zaman /tenants/me'den geliyor.
+const DEFAULT_TIMEZONE = "Europe/Istanbul";
+
 interface AuthContextValue {
   isLoading: boolean;
   isAuthenticated: boolean;
   tenantName: string | null;
+  tenantTimezone: string;
   login: (email: string, password: string) => Promise<void>;
   register: (tenantName: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -18,15 +25,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [tenantName, setTenantName] = useState<string | null>(null);
+  const [tenantTimezone, setTenantTimezone] = useState<string>(DEFAULT_TIMEZONE);
 
   async function refreshTenant(): Promise<void> {
     try {
       const tenant = await api.getMyTenant();
       setTenantName(tenant.name);
+      setTenantTimezone(tenant.timezone);
       setIsAuthenticated(true);
     } catch {
       setIsAuthenticated(false);
       setTenantName(null);
+      setTenantTimezone(DEFAULT_TIMEZONE);
     }
   }
 
@@ -70,11 +80,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await clearToken();
     setIsAuthenticated(false);
     setTenantName(null);
+    setTenantTimezone(DEFAULT_TIMEZONE);
   }
 
   return (
     <AuthContext.Provider
-      value={{ isLoading, isAuthenticated, tenantName, login, register, logout }}
+      value={{ isLoading, isAuthenticated, tenantName, tenantTimezone, login, register, logout }}
     >
       {children}
     </AuthContext.Provider>

@@ -21,6 +21,33 @@ ACCESS_TOKEN_COOKIE_NAME = "access_token"
 # varsayilan false; prod'da (HTTPS arkasinda) COOKIE_SECURE=true set edilmeli.
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "false").lower() == "true"
 
+# Dev/test'te belirtilmezse "development" sayilir - mevcut varsayilan
+# davranis (COOKIE_SECURE=false serbest) aynen korunur. Sadece ENVIRONMENT
+# acikca "production" olarak ayarlandiginda asagidaki kontrol devreye girer.
+ENVIRONMENT = os.environ.get("ENVIRONMENT", "development").strip().lower()
+
+
+def _validate_cookie_security(environment: str, cookie_secure: bool) -> None:
+    """Production'da COOKIE_SECURE=false ile calismayi ENGELLER - aksi halde
+    JWT tasiyan httpOnly cookie, Secure bayragi olmadan acik metin HTTP
+    uzerinden de tasinabilir, bu da bir man-in-the-middle saldirganinin
+    oturum cookie'sini calmasina izin verir. Ayri, parametreli bir fonksiyon
+    olmasinin sebebi: modulun kendi global durumuna (ENVIRONMENT/
+    COOKIE_SECURE, yukarida) bagli kalmadan, dogrudan farkli
+    kombinasyonlarla unit test edilebilmesi.
+    """
+    if environment == "production" and not cookie_secure:
+        raise RuntimeError(
+            "COOKIE_SECURE must be true in production "
+            "(set the COOKIE_SECURE environment variable to \"true\")"
+        )
+
+
+# Modul import edilir edilmez (yani uygulama baslarken, ilk router
+# import'unda) calisir - yanlis yapilandirilmis bir production ortaminda
+# uygulamanin hic ayaga kalkmamasini saglar.
+_validate_cookie_security(ENVIRONMENT, COOKIE_SECURE)
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 

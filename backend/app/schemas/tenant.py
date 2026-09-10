@@ -6,6 +6,10 @@ class TenantOut(BaseModel):
 
     id: int
     name: str
+    # Web/mobil, randevu saat/tarihlerini (backend'in urettigi UTC instant'lari)
+    # cihazin yerel saat dilimi yerine BU alanla goruntulemeli - aksi halde
+    # farkli bir ulkedeki kullanici gun sinirinda yanlis gun/saat gorebilir.
+    timezone: str
 
 
 class TenantWhatsAppConnect(BaseModel):

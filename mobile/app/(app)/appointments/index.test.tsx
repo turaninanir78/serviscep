@@ -6,6 +6,9 @@ import type { Appointment, Customer, Service, StaffMember } from "@/lib/types";
 import AppointmentsScreen from "./index";
 
 jest.mock("@/lib/api");
+jest.mock("@/lib/auth-context", () => ({
+  useAuth: () => ({ tenantTimezone: "Europe/Istanbul" }),
+}));
 jest.mock("expo-router", () => {
   const { useEffect } = require("react");
   return {

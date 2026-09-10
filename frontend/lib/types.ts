@@ -1,6 +1,7 @@
 export interface Tenant {
   id: number;
   name: string;
+  timezone: string;
 }
 
 export interface Appointment {

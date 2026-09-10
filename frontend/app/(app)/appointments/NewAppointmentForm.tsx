@@ -3,25 +3,15 @@
 import { useState } from "react";
 
 import { api, ApiError } from "@/lib/api";
+import { formatSlotTime, todayDateString } from "@/lib/dates";
 import { describeApiError } from "@/lib/errors";
 import type { Customer, Service, StaffMember } from "@/lib/types";
-
-function todayDateString(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function formatSlotTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
-}
 
 interface NewAppointmentFormProps {
   staffMembers: StaffMember[];
   services: Service[];
   customers: Customer[];
+  timezone: string;
   onCreated: () => void;
   onCancel: () => void;
 }
@@ -30,6 +20,7 @@ export default function NewAppointmentForm({
   staffMembers,
   services,
   customers,
+  timezone,
   onCreated,
   onCancel,
 }: NewAppointmentFormProps) {
@@ -38,7 +29,7 @@ export default function NewAppointmentForm({
 
   const [staffId, setStaffId] = useState("");
   const [serviceId, setServiceId] = useState("");
-  const [date, setDate] = useState(todayDateString());
+  const [date, setDate] = useState(todayDateString(timezone));
 
   const [slots, setSlots] = useState<string[] | null>(null);
   const [slotsLoading, setSlotsLoading] = useState(false);
@@ -230,7 +221,7 @@ export default function NewAppointmentForm({
                           : "border-zinc-300 text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
                       }`}
                     >
-                      {formatSlotTime(slot)}
+                      {formatSlotTime(slot, timezone)}
                     </button>
                   ))}
                 </div>

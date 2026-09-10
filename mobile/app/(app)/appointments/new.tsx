@@ -1,5 +1,5 @@
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -12,13 +12,17 @@ import {
 
 import { QuickCustomerForm } from "@/components/QuickCustomerForm";
 import { api, ApiError } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import { formatDateChip, formatSlotTime, nextNDates } from "@/lib/dates";
 import { describeApiError } from "@/lib/errors";
 import type { Customer, Service, StaffMember } from "@/lib/types";
 
-const DATE_OPTIONS = nextNDates(14);
-
 export default function NewAppointmentScreen() {
+  const { tenantTimezone } = useAuth();
+  // Cihazin yerel "bugun"u degil, TENANT'in yerel "bugun"u - bkz.
+  // lib/dates.ts basindaki aciklama.
+  const dateOptions = useMemo(() => nextNDates(14, tenantTimezone), [tenantTimezone]);
+
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -26,7 +30,7 @@ export default function NewAppointmentScreen() {
 
   const [staffId, setStaffId] = useState<number | null>(null);
   const [serviceId, setServiceId] = useState<number | null>(null);
-  const [date, setDate] = useState(DATE_OPTIONS[0]);
+  const [date, setDate] = useState(dateOptions[0]);
 
   const [slots, setSlots] = useState<string[] | null>(null);
   const [slotsLoading, setSlotsLoading] = useState(false);
@@ -220,7 +224,7 @@ export default function NewAppointmentScreen() {
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Tarih</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {DATE_OPTIONS.map((d) => (
+              {dateOptions.map((d) => (
                 <Pressable
                   key={d}
                   testID={`date-chip-${d}`}
@@ -255,7 +259,7 @@ export default function NewAppointmentScreen() {
                       <Text
                         style={[styles.chipText, selectedSlot === slot && styles.chipTextActive]}
                       >
-                        {formatSlotTime(slot)}
+                        {formatSlotTime(slot, tenantTimezone)}
                       </Text>
                     </Pressable>
                   ))}

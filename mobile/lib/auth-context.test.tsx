@@ -15,10 +15,12 @@ const mockedSetToken = setToken as jest.MockedFunction<typeof setToken>;
 const mockedClearToken = clearToken as jest.MockedFunction<typeof clearToken>;
 
 function Probe() {
-  const { isLoading, isAuthenticated, tenantName, login, logout } = useAuth();
+  const { isLoading, isAuthenticated, tenantName, tenantTimezone, login, logout } = useAuth();
   return (
     <>
-      <Text testID="state">{JSON.stringify({ isLoading, isAuthenticated, tenantName })}</Text>
+      <Text testID="state">
+        {JSON.stringify({ isLoading, isAuthenticated, tenantName, tenantTimezone })}
+      </Text>
       <Pressable testID="do-login" onPress={() => login("a@b.com", "pw")}>
         <Text>login</Text>
       </Pressable>
@@ -57,13 +59,24 @@ describe("AuthProvider / useAuth", () => {
 
   test("depolanmis GECERLI bir token varsa mount sonrasi otomatik kimlik dogrulanir", async () => {
     mockedGetToken.mockResolvedValue("stored-token");
-    mockedApi.getMyTenant.mockResolvedValue({ id: 1, name: "Var Olan Kuaför" });
+    mockedApi.getMyTenant.mockResolvedValue({
+      id: 1,
+      name: "Var Olan Kuaför",
+      timezone: "America/New_York",
+    });
 
     const { readState } = renderProbe();
 
     await waitFor(() => expect(readState().isLoading).toBe(false));
     expect(readState().isAuthenticated).toBe(true);
     expect(readState().tenantName).toBe("Var Olan Kuaför");
+    expect(readState().tenantTimezone).toBe("America/New_York");
+  });
+
+  test("kimliksizken tenantTimezone varsayilan (backend'in kolon varsayilaniyla ayni) degerdedir", async () => {
+    const { readState } = renderProbe();
+    await waitFor(() => expect(readState().isLoading).toBe(false));
+    expect(readState().tenantTimezone).toBe("Europe/Istanbul");
   });
 
   test("depolanmis token GECERSIZSE (suresi dolmus/gecersiz) kimliksiz sayilir", async () => {
@@ -78,7 +91,11 @@ describe("AuthProvider / useAuth", () => {
 
   test("basarili login sonrasi token secure storage'a yazilir ve tenant bilgisi yuklenir", async () => {
     mockedApi.login.mockResolvedValue({ access_token: "fresh-token", token_type: "bearer" });
-    mockedApi.getMyTenant.mockResolvedValue({ id: 2, name: "Yeni Kuaför" });
+    mockedApi.getMyTenant.mockResolvedValue({
+      id: 2,
+      name: "Yeni Kuaför",
+      timezone: "Europe/Istanbul",
+    });
 
     const { readState, getByTestId } = renderProbe();
     await waitFor(() => expect(readState().isLoading).toBe(false));
@@ -93,7 +110,11 @@ describe("AuthProvider / useAuth", () => {
 
   test("logout secure storage'dan token'i siler ve kimliksiz duruma doner", async () => {
     mockedGetToken.mockResolvedValue("stored-token");
-    mockedApi.getMyTenant.mockResolvedValue({ id: 1, name: "Kuaför" });
+    mockedApi.getMyTenant.mockResolvedValue({
+      id: 1,
+      name: "Kuaför",
+      timezone: "Europe/Istanbul",
+    });
 
     const { readState, getByTestId } = renderProbe();
     await waitFor(() => expect(readState().isAuthenticated).toBe(true));

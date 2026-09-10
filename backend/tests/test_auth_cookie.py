@@ -65,6 +65,9 @@ def test_cookie_from_register_grants_access_to_protected_route():
         me = session.get(f"{BASE_URL}/tenants/me")
         assert me.status_code == 200
         assert me.json()["name"] == "Cookie Test Tenant"
+        # Web/mobil, randevu saat/tarihlerini bu alanla goruntuluyor (cihaz
+        # saat dilimi yerine) - bkz. app/schemas/tenant.py::TenantOut.
+        assert me.json()["timezone"] == "Europe/Istanbul"
     finally:
         _cleanup_by_email(email)
 
