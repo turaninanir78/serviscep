@@ -7,6 +7,9 @@ import type { Customer, Service, StaffMember } from "@/lib/types";
 import NewAppointmentScreen from "./new";
 
 jest.mock("@/lib/api");
+jest.mock("@/lib/auth-context", () => ({
+  useAuth: () => ({ tenantTimezone: "Europe/Istanbul" }),
+}));
 // router'i disaridan bir degiskenle factory'ye tasimiyoruz (jest.mock
 // hoisting'i yuzunden bu modulu tetikleyen ilk import, o degisken henuz
 // atanmadan calisabilir ve router "undefined" kalir) - bunun yerine

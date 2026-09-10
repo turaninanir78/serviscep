@@ -13,11 +13,13 @@ import {
 import { NavRow } from "@/components/NavRow";
 import { StatusBadge } from "@/components/StatusBadge";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import { formatDateTime } from "@/lib/dates";
 import { describeApiError } from "@/lib/errors";
 import type { Appointment, Customer, Service, StaffMember } from "@/lib/types";
 
 export default function AppointmentsScreen() {
+  const { tenantTimezone } = useAuth();
   const [appointments, setAppointments] = useState<Appointment[] | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [services, setServices] = useState<Service[]>([]);
@@ -108,7 +110,7 @@ export default function AppointmentsScreen() {
                 <Text style={styles.rowSubtitle}>
                   {serviceLabel(item.service_id)} — {staffLabel(item.staff_id)}
                 </Text>
-                <Text style={styles.rowSubtitle}>{formatDateTime(item.start_at)}</Text>
+                <Text style={styles.rowSubtitle}>{formatDateTime(item.start_at, tenantTimezone)}</Text>
               </View>
               <StatusBadge status={item.status} />
             </Pressable>

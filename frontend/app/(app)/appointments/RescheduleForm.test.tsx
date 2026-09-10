@@ -55,7 +55,7 @@ function slotsResponse(slots: string[]): AvailableSlotsResponse {
   return { date: "2026-09-14", staff_id: 1, service_id: 2, slots };
 }
 
-function renderForm() {
+function renderForm(timezone = "Europe/Istanbul") {
   const onRescheduled = vi.fn();
   const onCancel = vi.fn();
   const utils = render(
@@ -64,6 +64,7 @@ function renderForm() {
       staffMembers={staffMembers}
       services={services}
       customers={customers}
+      timezone={timezone}
       onRescheduled={onRescheduled}
       onCancel={onCancel}
     />,
@@ -95,6 +96,21 @@ describe("RescheduleForm", () => {
     await waitFor(() => expect(getAvailableSlots).toHaveBeenCalledTimes(1));
     expect(getAvailableSlots).toHaveBeenCalledWith(1, 2, "2026-09-14");
     expect(await screen.findByRole("button", { name: "10:00" })).toBeInTheDocument();
+  });
+
+  test("başlangıç tarihi, tarayıcının değil TENANT'ın saat dilimine göre hesaplanır", async () => {
+    const getAvailableSlots = vi
+      .spyOn(api, "getAvailableSlots")
+      .mockResolvedValue(slotsResponse([]));
+
+    // appointment.start_at = 2026-09-14T09:00:00+03:00 = 2026-09-14T06:00:00Z.
+    // Los Angeles'ta (Eylul'de PDT, UTC-7) bu, bir onceki takvim gunu olan
+    // 2026-09-13'e denk gelir - Istanbul'daki "14 Eylul"den FARKLI bir gun.
+    // Bu, baslangic tarihinin tarayicinin degil "timezone" prop'unun
+    // kullanildigini dogruluyor.
+    renderForm("America/Los_Angeles");
+
+    await waitFor(() => expect(getAvailableSlots).toHaveBeenCalledWith(1, 2, "2026-09-13"));
   });
 
   test("tarih değişince slot listesi yeniden yüklenir ve eski seçim temizlenir", async () => {

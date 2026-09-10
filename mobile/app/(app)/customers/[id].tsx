@@ -4,11 +4,13 @@ import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "
 
 import { StatusBadge } from "@/components/StatusBadge";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import { formatDateTime } from "@/lib/dates";
 import { describeApiError } from "@/lib/errors";
 import type { Appointment, Customer, Service, StaffMember } from "@/lib/types";
 
 export default function CustomerDetailScreen() {
+  const { tenantTimezone } = useAuth();
   const { id } = useLocalSearchParams<{ id: string }>();
   const customerId = Number(id);
 
@@ -75,7 +77,9 @@ export default function CustomerDetailScreen() {
           {customer.display_name || customer.whatsapp_number}
         </Text>
         <Text style={styles.detailLine}>{customer.whatsapp_number}</Text>
-        <Text style={styles.detailLine}>İlk görülme: {formatDateTime(customer.first_seen_at)}</Text>
+        <Text style={styles.detailLine}>
+          İlk görülme: {formatDateTime(customer.first_seen_at, tenantTimezone)}
+        </Text>
       </View>
 
       <Text style={styles.sectionTitle}>Randevu Geçmişi</Text>
@@ -99,7 +103,7 @@ export default function CustomerDetailScreen() {
                 <Text style={styles.rowTitle}>
                   {serviceLabel(item.service_id)} — {staffLabel(item.staff_id)}
                 </Text>
-                <Text style={styles.rowSubtitle}>{formatDateTime(item.start_at)}</Text>
+                <Text style={styles.rowSubtitle}>{formatDateTime(item.start_at, tenantTimezone)}</Text>
               </View>
               <StatusBadge status={item.status} />
             </Pressable>

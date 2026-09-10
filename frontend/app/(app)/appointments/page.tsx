@@ -3,10 +3,16 @@
 import { useEffect, useState } from "react";
 
 import { api } from "@/lib/api";
+import { formatDateTime as formatDateTimeInTimezone } from "@/lib/dates";
 import { describeApiError } from "@/lib/errors";
 import type { Appointment, Customer, Service, StaffMember } from "@/lib/types";
 import NewAppointmentForm from "./NewAppointmentForm";
 import RescheduleForm from "./RescheduleForm";
+
+// Tenant timezone'i /tenants/me'den gelene kadar (ilk yukleme anindaki
+// kisa an) kullanilacak baslangic degeri - backend'in kolon varsayilaniyla
+// ayni (bkz. backend/app/models - Tenant.timezone server_default).
+const DEFAULT_TIMEZONE = "Europe/Istanbul";
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "Beklemede",
@@ -36,6 +42,7 @@ export default function AppointmentsPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
+  const [timezone, setTimezone] = useState(DEFAULT_TIMEZONE);
   const [error, setError] = useState<string | null>(null);
   const [activeForm, setActiveForm] = useState<ActiveForm | null>(null);
   const [actingOnId, setActingOnId] = useState<number | null>(null);
@@ -46,12 +53,14 @@ export default function AppointmentsPage() {
       api.getCustomers(),
       api.getServices(),
       api.getStaffMembers(),
+      api.getMyTenant(),
     ])
-      .then(([appointmentsData, customersData, servicesData, staffData]) => {
+      .then(([appointmentsData, customersData, servicesData, staffData, tenant]) => {
         setAppointments(appointmentsData);
         setCustomers(customersData);
         setServices(servicesData);
         setStaffMembers(staffData);
+        setTimezone(tenant.timezone);
       })
       .catch((err) => {
         setError(describeApiError(err));
@@ -76,7 +85,7 @@ export default function AppointmentsPage() {
   }
 
   function formatDateTime(iso: string): string {
-    return new Date(iso).toLocaleString("tr-TR", { dateStyle: "short", timeStyle: "short" });
+    return formatDateTimeInTimezone(iso, timezone);
   }
 
   function handleFormDone() {
@@ -170,6 +179,7 @@ export default function AppointmentsPage() {
           staffMembers={staffMembers}
           services={services}
           customers={customers}
+          timezone={timezone}
           onCreated={handleFormDone}
           onCancel={() => setActiveForm(null)}
         />
@@ -181,6 +191,7 @@ export default function AppointmentsPage() {
           staffMembers={staffMembers}
           services={services}
           customers={customers}
+          timezone={timezone}
           onRescheduled={handleFormDone}
           onCancel={() => setActiveForm(null)}
         />

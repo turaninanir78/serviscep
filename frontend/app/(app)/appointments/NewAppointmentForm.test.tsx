@@ -36,7 +36,7 @@ function slotsResponse(slots: string[]): AvailableSlotsResponse {
   return { date: "2026-09-14", staff_id: 1, service_id: 2, slots };
 }
 
-function renderForm() {
+function renderForm(timezone = "Europe/Istanbul") {
   const onCreated = vi.fn();
   const onCancel = vi.fn();
   const utils = render(
@@ -44,6 +44,7 @@ function renderForm() {
       staffMembers={staffMembers}
       services={services}
       customers={customers}
+      timezone={timezone}
       onCreated={onCreated}
       onCancel={onCancel}
     />,
@@ -91,6 +92,23 @@ describe("NewAppointmentForm", () => {
     expect(getAvailableSlots).toHaveBeenCalledWith(1, 2, usedDate);
     expect(await screen.findByRole("button", { name: "09:00" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "09:30" })).toBeInTheDocument();
+  });
+
+  test("slot saatleri, tarayıcının değil TENANT'ın saat dilimiyle gösterilir", async () => {
+    vi.spyOn(api, "getAvailableSlots").mockResolvedValue(
+      slotsResponse(["2026-09-14T09:00:00+03:00"]),
+    );
+
+    const user = userEvent.setup();
+    // Istanbul yerel saatiyle 09:00 olan bir slot, Los Angeles'ta (Eylul'de
+    // PDT, UTC-7) bir onceki takvim gununde 23:00 olarak gorunmeli - bu,
+    // "timezone" prop'unun gercekten kullanildigini (tarayicinin kendi
+    // yerel saat dilimine duselmedigini) dogruluyor.
+    renderForm("America/Los_Angeles");
+    await selectStaffAndService(user);
+
+    expect(await screen.findByRole("button", { name: "23:00" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "09:00" })).not.toBeInTheDocument();
   });
 
   test("parametreler değişince eski slot listesi ve seçili slot senkron olarak temizlenir", async () => {

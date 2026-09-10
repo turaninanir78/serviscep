@@ -3,22 +3,31 @@
 import { useEffect, useState } from "react";
 
 import { api } from "@/lib/api";
+import { formatDateTime } from "@/lib/dates";
 import { describeApiError } from "@/lib/errors";
 import type { Customer } from "@/lib/types";
 
+// Tenant timezone'i /tenants/me'den gelene kadar (ilk yukleme anindaki
+// kisa an) kullanilacak baslangic degeri - backend'in kolon varsayilaniyla
+// ayni (bkz. backend/app/models - Tenant.timezone server_default).
+const DEFAULT_TIMEZONE = "Europe/Istanbul";
+
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[] | null>(null);
+  const [timezone, setTimezone] = useState(DEFAULT_TIMEZONE);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api
-      .getCustomers()
-      .then(setCustomers)
+    Promise.all([api.getCustomers(), api.getMyTenant()])
+      .then(([customersData, tenant]) => {
+        setCustomers(customersData);
+        setTimezone(tenant.timezone);
+      })
       .catch((err) => setError(describeApiError(err)));
   }, []);
 
   function formatDate(iso: string): string {
-    return new Date(iso).toLocaleString("tr-TR", { dateStyle: "short", timeStyle: "short" });
+    return formatDateTime(iso, timezone);
   }
 
   return (

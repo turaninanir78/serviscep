@@ -1,5 +1,5 @@
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -11,14 +11,21 @@ import {
 
 import { StatusBadge, ACTIVE_STATUSES } from "@/components/StatusBadge";
 import { api, ApiError } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import { confirmThen } from "@/lib/confirm";
 import { formatDateTime, formatSlotTime, nextNDates, formatDateChip } from "@/lib/dates";
 import { describeApiError } from "@/lib/errors";
 import type { Appointment, Customer, Service, StaffMember } from "@/lib/types";
 
-const RESCHEDULE_DATE_OPTIONS = nextNDates(14);
-
 export default function AppointmentDetailScreen() {
+  const { tenantTimezone } = useAuth();
+  // Cihazin yerel "bugun"u degil, TENANT'in yerel "bugun"u - bkz.
+  // lib/dates.ts basindaki aciklama.
+  const rescheduleDateOptions = useMemo(
+    () => nextNDates(14, tenantTimezone),
+    [tenantTimezone],
+  );
+
   const { id } = useLocalSearchParams<{ id: string }>();
   const appointmentId = Number(id);
 
@@ -76,7 +83,7 @@ export default function AppointmentDetailScreen() {
 
   function openReschedule() {
     setRescheduling(true);
-    const firstDate = RESCHEDULE_DATE_OPTIONS[0];
+    const firstDate = rescheduleDateOptions[0];
     setSelectedDate(firstDate);
     loadSlots(firstDate);
   }
@@ -146,7 +153,7 @@ export default function AppointmentDetailScreen() {
         </Text>
         <Text style={styles.detailLine}>{service?.name ?? `#${appointment.service_id}`}</Text>
         <Text style={styles.detailLine}>{staff?.name ?? `#${appointment.staff_id}`}</Text>
-        <Text style={styles.detailLine}>{formatDateTime(appointment.start_at)}</Text>
+        <Text style={styles.detailLine}>{formatDateTime(appointment.start_at, tenantTimezone)}</Text>
       </View>
 
       {error && <Text style={styles.error}>{error}</Text>}
@@ -214,7 +221,7 @@ export default function AppointmentDetailScreen() {
           </View>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dateRow}>
-            {RESCHEDULE_DATE_OPTIONS.map((date) => (
+            {rescheduleDateOptions.map((date) => (
               <Pressable
                 key={date}
                 onPress={() => handleSelectDate(date)}
@@ -251,7 +258,7 @@ export default function AppointmentDetailScreen() {
                       selectedSlot === slot && styles.slotChipTextActive,
                     ]}
                   >
-                    {formatSlotTime(slot)}
+                    {formatSlotTime(slot, tenantTimezone)}
                   </Text>
                 </Pressable>
               ))}
