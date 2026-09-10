@@ -315,36 +315,23 @@ def test_signature_signed_with_wrong_secret_is_rejected(tenant_with_whatsapp):
 
 # --- POST /webhooks/whatsapp - bozuk govde ---
 #
-# BILINEN ACIK: gecerli imzali ama bozuk/bos JSON govdeli bir istek, su an
-# endpoint'in `await request.json()` cagrisinda yakalanmamis bir
-# JSONDecodeError'a yol acip 500 Internal Server Error donduruyor - ne bu
-# dosyanin basindaki "Meta'nin kurali: HER ZAMAN 200 don" felsefesine (Meta
-# aksi halde ayni bozuk istegi tekrar tekrar dener) ne de "422/400 don,
-# cokme" beklentisine uyuyor. Kod BILEREK degistirilmedi (gorev kapsam
-# uyarisi) - asagidaki iki test bunu xfail olarak isaretleyip belgeliyor.
+# Gecerli imzali ama bozuk/bos JSON govdeli bir istek artik receive_webhook
+# icindeki try/except json.JSONDecodeError tarafindan yakalanip 200 ile
+# yanitlaniyor - dosyanin basindaki "Meta'nin kurali: HER ZAMAN 200 don"
+# felsefesiyle tutarli (Meta aksi halde ayni bozuk istegi tekrar tekrar
+# dener). Onceden bu 500 donduren, xfail ile belgelenmis bilinen bir aciktı.
 
 
-@pytest.mark.xfail(
-    reason="Bilinen aciklik: bozuk JSON govdesi request.json()'da "
-    "yakalanmiyor, 500 donuyor (422 ya da Meta'nin 'her zaman 200' "
-    "kuralina uygun bir yanit degil).",
-    strict=True,
-)
 def test_malformed_json_body_with_valid_signature_does_not_return_500():
     body = b"{bu gecerli bir json degil"
     status_code, _ = _post_webhook_raw(body, _sign(body))
-    assert status_code != 500
+    assert status_code == 200
 
 
-@pytest.mark.xfail(
-    reason="Bilinen aciklik: bos govde de ayni JSONDecodeError yolundan "
-    "500 donuyor.",
-    strict=True,
-)
 def test_empty_body_with_valid_signature_does_not_return_500():
     body = b""
     status_code, _ = _post_webhook_raw(body, _sign(body))
-    assert status_code != 500
+    assert status_code == 200
 
 
 def test_server_remains_usable_after_malformed_request(tenant_with_whatsapp):
@@ -437,14 +424,12 @@ def test_duplicate_delivery_with_same_wa_message_id_is_idempotent(tenant_with_wh
         db.close()
 
 
-@pytest.mark.xfail(
-    reason="Bilinen aciklik (dusuk gercek-dunya riski - gercek Meta "
-    "trafiginde mesaj id'si her zaman bulunur): wa_message_id sutunu "
-    "NULLABLE oldugu icin bu alanin olmadigi tekrar eden istekler UNIQUE "
-    "constraint'e yakalanmiyor, mukerrer Conversation kaydi olusuyor.",
-    strict=True,
-)
 def test_duplicate_delivery_without_wa_message_id_is_not_deduplicated(tenant_with_whatsapp):
+    """`id` alani eksik olsa da _fallback_message_key (bkz.
+    app/api/webhooks.py) mesajin degismeyen alanlarindan deterministik bir
+    yedek anahtar turetiyor, bu da wa_message_id UNIQUE constraint'ine
+    tabi oluyor - onceden bu, mukerrer Conversation kaydina yol acan
+    bilinen bir aciktı."""
     payload = _message_payload_without_id(
         "1234567890123", "905551110011", "Id'siz mesaj, iki kere gonderiliyor"
     )
@@ -463,6 +448,6 @@ def test_duplicate_delivery_without_wa_message_id_is_not_deduplicated(tenant_wit
         conversations = (
             db.query(Conversation).filter(Conversation.customer_id == customer.id).all()
         )
-        assert len(conversations) == 1  # ideal beklenti - su an BASARISIZ (xfail)
+        assert len(conversations) == 1
     finally:
         db.close()
