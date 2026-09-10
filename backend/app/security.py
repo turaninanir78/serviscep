@@ -69,6 +69,14 @@ class AuthContext:
 def get_current_tenant(request: Request) -> AuthContext:
     token = request.cookies.get(ACCESS_TOKEN_COOKIE_NAME)
     if token is None:
+        # Mobil app'lerin (React Native) tarayici cookie jar'i yok - token'i
+        # Authorization: Bearer header'iyla gonderiyorlar (bkz. app/api/auth.py
+        # /auth/mobile/*). Web akisi bundan ETKILENMIYOR: cookie varsa yukarida
+        # zaten bulunup buraya hic dusulmuyor.
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.removeprefix("Bearer ").strip() or None
+    if token is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
         )
