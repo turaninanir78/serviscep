@@ -66,6 +66,18 @@ export interface RescheduleAppointmentInput {
   start_at: string;
 }
 
+export interface CreateAppointmentInput {
+  staff_id: number;
+  service_id: number;
+  customer_id: number;
+  start_at: string;
+}
+
+export interface CreateCustomerInput {
+  whatsapp_number: string;
+  display_name?: string | null;
+}
+
 export const api = {
   login: (email: string, password: string) =>
     request<MobileTokenResponse>("/auth/mobile/login", {
@@ -85,7 +97,13 @@ export const api = {
 
   getAppointment: (id: number) => request<Appointment>(`/appointments/${id}`),
 
+  createAppointment: (input: CreateAppointmentInput) =>
+    request<Appointment>("/appointments", { method: "POST", body: JSON.stringify(input) }),
+
   getCustomers: () => request<Customer[]>("/customers"),
+
+  createCustomer: (input: CreateCustomerInput) =>
+    request<Customer>("/customers", { method: "POST", body: JSON.stringify(input) }),
 
   getServices: () => request<Service[]>("/services"),
 

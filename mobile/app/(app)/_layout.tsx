@@ -35,6 +35,7 @@ export default function AppLayout() {
       }}
     >
       <Stack.Screen name="appointments/index" options={{ title: "Randevular" }} />
+      <Stack.Screen name="appointments/new" options={{ title: "Yeni Randevu" }} />
       <Stack.Screen name="appointments/[id]" options={{ title: "Randevu Detayı" }} />
       <Stack.Screen name="staff/index" options={{ title: "Personel" }} />
       <Stack.Screen name="services/index" options={{ title: "Hizmetler" }} />
