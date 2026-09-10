@@ -116,6 +116,8 @@ export const api = {
 
   getCustomers: () => request<Customer[]>("/customers"),
 
+  getCustomer: (id: number) => request<Customer>(`/customers/${id}`),
+
   createCustomer: (input: CreateCustomerInput) =>
     request<Customer>("/customers", { method: "POST", body: JSON.stringify(input) }),
 

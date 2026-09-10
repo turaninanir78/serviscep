@@ -6,12 +6,13 @@ const LINKS = [
   { href: "/(app)/staff" as const, label: "Personel" },
   { href: "/(app)/services" as const, label: "Hizmetler" },
   { href: "/(app)/availability" as const, label: "Müsaitlik" },
+  { href: "/(app)/customers" as const, label: "Müşteriler" },
 ];
 
 export function NavRow({
   active,
 }: {
-  active: "appointments" | "staff" | "services" | "availability";
+  active: "appointments" | "staff" | "services" | "availability" | "customers";
 }) {
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.row}>

@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 
+import { QuickCustomerForm } from "@/components/QuickCustomerForm";
 import { api, ApiError } from "@/lib/api";
 import { formatDateChip, formatSlotTime, nextNDates } from "@/lib/dates";
 import { describeApiError } from "@/lib/errors";
@@ -40,10 +41,6 @@ export default function NewAppointmentScreen() {
   const [customerSearch, setCustomerSearch] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [showNewCustomer, setShowNewCustomer] = useState(false);
-  const [newCustomerName, setNewCustomerName] = useState("");
-  const [newCustomerPhone, setNewCustomerPhone] = useState("");
-  const [customerError, setCustomerError] = useState<string | null>(null);
-  const [creatingCustomer, setCreatingCustomer] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -130,26 +127,11 @@ export default function NewAppointmentScreen() {
           })
           .slice(0, 20);
 
-  async function handleCreateCustomer() {
-    if (!newCustomerPhone.trim()) return;
-    setCustomerError(null);
-    setCreatingCustomer(true);
-    try {
-      const customer = await api.createCustomer({
-        whatsapp_number: newCustomerPhone.trim(),
-        display_name: newCustomerName.trim() || null,
-      });
-      setCustomers((prev) => [...prev, customer]);
-      setSelectedCustomer(customer);
-      setShowNewCustomer(false);
-      setNewCustomerName("");
-      setNewCustomerPhone("");
-      setCustomerSearch("");
-    } catch (err) {
-      setCustomerError(describeApiError(err));
-    } finally {
-      setCreatingCustomer(false);
-    }
+  function handleCustomerCreated(customer: Customer) {
+    setCustomers((prev) => [...prev, customer]);
+    setSelectedCustomer(customer);
+    setShowNewCustomer(false);
+    setCustomerSearch("");
   }
 
   async function handleSubmit() {
@@ -336,37 +318,7 @@ export default function NewAppointmentScreen() {
                     </Pressable>
                   ) : (
                     <View style={styles.newCustomerForm}>
-                      <TextInput
-                        testID="new-customer-name"
-                        placeholder="Ad (opsiyonel)"
-                        value={newCustomerName}
-                        onChangeText={setNewCustomerName}
-                        style={styles.input}
-                      />
-                      <TextInput
-                        testID="new-customer-phone"
-                        placeholder="WhatsApp numarası"
-                        value={newCustomerPhone}
-                        onChangeText={setNewCustomerPhone}
-                        keyboardType="phone-pad"
-                        style={styles.input}
-                      />
-                      {customerError && <Text style={styles.error}>{customerError}</Text>}
-                      <Pressable
-                        testID="new-customer-submit"
-                        style={[
-                          styles.saveButton,
-                          (!newCustomerPhone.trim() || creatingCustomer) && styles.buttonDisabled,
-                        ]}
-                        disabled={!newCustomerPhone.trim() || creatingCustomer}
-                        onPress={handleCreateCustomer}
-                      >
-                        {creatingCustomer ? (
-                          <ActivityIndicator color="#fff" />
-                        ) : (
-                          <Text style={styles.buttonText}>Müşteriyi Ekle</Text>
-                        )}
-                      </Pressable>
+                      <QuickCustomerForm onCreated={handleCustomerCreated} />
                     </View>
                   )}
                 </>
