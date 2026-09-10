@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models import Tenant, User
+from app.rate_limit import AUTH_LOGIN_RATE_LIMIT, AUTH_REGISTER_RATE_LIMIT, limiter
 from app.schemas.auth import LoginRequest, MobileTokenResponse, RegisterRequest
 from app.security import (
     clear_auth_cookie,
@@ -50,7 +51,8 @@ def _authenticate(db: Session, payload: LoginRequest) -> User:
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> Response:
+@limiter.limit(AUTH_REGISTER_RATE_LIMIT)
+def register(request: Request, payload: RegisterRequest, db: Session = Depends(get_db)) -> Response:
     tenant, user = _create_tenant_and_user(db, payload)
     token = create_access_token(user_id=user.id, tenant_id=tenant.id)
     response = Response(status_code=status.HTTP_201_CREATED)
@@ -59,7 +61,8 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> Respons
 
 
 @router.post("/login")
-def login(payload: LoginRequest, db: Session = Depends(get_db)) -> Response:
+@limiter.limit(AUTH_LOGIN_RATE_LIMIT)
+def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)) -> Response:
     user = _authenticate(db, payload)
     token = create_access_token(user_id=user.id, tenant_id=user.tenant_id)
     response = Response(status_code=status.HTTP_200_OK)
@@ -98,14 +101,20 @@ def logout() -> Response:
     status_code=status.HTTP_201_CREATED,
     response_model=MobileTokenResponse,
 )
-def register_mobile(payload: RegisterRequest, db: Session = Depends(get_db)) -> MobileTokenResponse:
+@limiter.limit(AUTH_REGISTER_RATE_LIMIT)
+def register_mobile(
+    request: Request, payload: RegisterRequest, db: Session = Depends(get_db)
+) -> MobileTokenResponse:
     tenant, user = _create_tenant_and_user(db, payload)
     token = create_access_token(user_id=user.id, tenant_id=tenant.id)
     return MobileTokenResponse(access_token=token)
 
 
 @router.post("/mobile/login", response_model=MobileTokenResponse)
-def login_mobile(payload: LoginRequest, db: Session = Depends(get_db)) -> MobileTokenResponse:
+@limiter.limit(AUTH_LOGIN_RATE_LIMIT)
+def login_mobile(
+    request: Request, payload: LoginRequest, db: Session = Depends(get_db)
+) -> MobileTokenResponse:
     user = _authenticate(db, payload)
     token = create_access_token(user_id=user.id, tenant_id=user.tenant_id)
     return MobileTokenResponse(access_token=token)
