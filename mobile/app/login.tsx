@@ -14,7 +14,7 @@ import { describeApiError } from "@/lib/errors";
 
 export default function LoginScreen() {
   const { login } = useAuth();
-  const [email, setEmail] = useState("");
+  const [emailOrPhone, setEmailOrPhone] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -23,7 +23,7 @@ export default function LoginScreen() {
     setError(null);
     setSubmitting(true);
     try {
-      await login(email, password);
+      await login(emailOrPhone, password);
       router.replace("/(app)/appointments");
     } catch (err) {
       setError(describeApiError(err));
@@ -37,13 +37,12 @@ export default function LoginScreen() {
 
       <TextInput
         style={styles.input}
-        placeholder="E-posta"
+        placeholder="E-posta veya Telefon"
         autoCapitalize="none"
         autoCorrect={false}
-        keyboardType="email-address"
-        value={email}
-        onChangeText={setEmail}
-        testID="login-email"
+        value={emailOrPhone}
+        onChangeText={setEmailOrPhone}
+        testID="login-identifier"
       />
       <TextInput
         style={styles.input}

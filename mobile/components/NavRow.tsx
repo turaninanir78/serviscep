@@ -7,12 +7,13 @@ const LINKS = [
   { href: "/(app)/services" as const, label: "Hizmetler" },
   { href: "/(app)/availability" as const, label: "Müsaitlik" },
   { href: "/(app)/customers" as const, label: "Müşteriler" },
+  { href: "/(app)/profile" as const, label: "Hesabım" },
 ];
 
 export function NavRow({
   active,
 }: {
-  active: "appointments" | "staff" | "services" | "availability" | "customers";
+  active: "appointments" | "staff" | "services" | "availability" | "customers" | "profile";
 }) {
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.row}>

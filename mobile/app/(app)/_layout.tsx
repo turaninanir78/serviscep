@@ -42,6 +42,7 @@ export default function AppLayout() {
       <Stack.Screen name="availability/index" options={{ title: "Müsaitlik" }} />
       <Stack.Screen name="customers/index" options={{ title: "Müşteriler" }} />
       <Stack.Screen name="customers/[id]" options={{ title: "Müşteri Detayı" }} />
+      <Stack.Screen name="profile/index" options={{ title: "Hesabım" }} />
     </Stack>
   );
 }

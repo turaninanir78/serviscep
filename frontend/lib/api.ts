@@ -6,6 +6,7 @@ import type {
   Service,
   StaffMember,
   Tenant,
+  User,
 } from "./types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? "";
@@ -96,20 +97,59 @@ export interface RescheduleAppointmentInput {
   start_at: string;
 }
 
+export interface OtpRequestResponse {
+  message: string;
+  debug_code: string | null;
+}
+
 export const api = {
-  login: (email: string, password: string) =>
+  login: (emailOrPhone: string, password: string) =>
     request<void>("/auth/login", {
       method: "POST",
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email_or_phone: emailOrPhone, password }),
     }),
 
-  register: (tenantName: string, email: string, password: string) =>
-    request<void>("/auth/register", {
+  // Telefon + OTP ile kayit - uc adima bolunmus (bkz.
+  // backend/app/api/auth.py'deki ayni isimli endpoint'lerin ustundeki
+  // yorum). Eski tek adimli /auth/register artik web UI'dan cagrilmiyor
+  // (backend'de sadece geriye donuk uyumluluk icin duruyor).
+  requestRegisterOtp: (countryCode: string, phoneNumber: string) =>
+    request<OtpRequestResponse>("/auth/register/request-otp", {
       method: "POST",
-      body: JSON.stringify({ tenant_name: tenantName, email, password }),
+      body: JSON.stringify({ country_code: countryCode, phone_number: phoneNumber }),
+    }),
+
+  verifyRegisterOtp: (countryCode: string, phoneNumber: string, code: string) =>
+    request<{ registration_token: string }>("/auth/register/verify-otp", {
+      method: "POST",
+      body: JSON.stringify({ country_code: countryCode, phone_number: phoneNumber, code }),
+    }),
+
+  completeRegister: (registrationToken: string, tenantName: string, password: string) =>
+    request<void>("/auth/register/complete", {
+      method: "POST",
+      body: JSON.stringify({
+        registration_token: registrationToken,
+        tenant_name: tenantName,
+        password,
+      }),
     }),
 
   logout: () => request<void>("/auth/logout", { method: "POST" }),
+
+  getMe: () => request<User>("/auth/me"),
+
+  requestAddEmailOtp: (email: string) =>
+    request<OtpRequestResponse>("/auth/profile/request-email-otp", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+
+  verifyAddEmail: (email: string, code: string) =>
+    request<User>("/auth/profile/verify-email", {
+      method: "POST",
+      body: JSON.stringify({ email, code }),
+    }),
 
   getMyTenant: () => request<Tenant>("/tenants/me"),
 

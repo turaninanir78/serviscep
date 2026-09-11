@@ -82,7 +82,7 @@ def test_login_with_correct_password_sets_cookie():
 
         session = requests.Session()
         res = session.post(
-            f"{BASE_URL}/auth/login", json={"email": email, "password": "correct-pw"}
+            f"{BASE_URL}/auth/login", json={"email_or_phone": email, "password": "correct-pw"}
         )
         assert res.status_code == 200
         assert "access_token" not in res.text
@@ -102,7 +102,7 @@ def test_login_with_wrong_password_returns_401_and_sets_no_cookie():
 
         session = requests.Session()
         res = session.post(
-            f"{BASE_URL}/auth/login", json={"email": email, "password": "wrong-pw"}
+            f"{BASE_URL}/auth/login", json={"email_or_phone": email, "password": "wrong-pw"}
         )
         assert res.status_code == 401
         assert session.cookies.get(COOKIE_NAME) is None

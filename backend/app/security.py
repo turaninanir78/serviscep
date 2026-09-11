@@ -65,6 +65,38 @@ def create_access_token(user_id: int, tenant_id: int) -> str:
     return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
 
 
+# Telefon+OTP ile kayit, iki adima bolunmus durumda (once telefon
+# dogrulanir, sonra sifre/firma adi alinir) ama henuz bir Tenant/User
+# olusmadigi icin normal bir access token verilemez. Bunun yerine, "bu
+# telefon az once dogrulandi" bilgisini tasiyan, KISA omurlu, ayri amacli
+# (purpose alaniyla normal access token'dan ayirt edilen) bir JWT
+# kullaniliyor - ek bir "pending registration" tablosuna gerek kalmadan.
+REGISTRATION_TOKEN_PURPOSE = "phone_verified_registration"
+REGISTRATION_TOKEN_EXPIRE_MINUTES = 10
+
+
+def create_registration_token(phone: str) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(minutes=REGISTRATION_TOKEN_EXPIRE_MINUTES)
+    payload = {"purpose": REGISTRATION_TOKEN_PURPOSE, "phone": phone, "exp": expire}
+    return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+
+
+def decode_registration_token(token: str) -> str:
+    """Gecerliyse dogrulanmis telefon numarasini dondurur, degilse 400."""
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+    except jwt.PyJWTError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Dogrulama oturumunun suresi dolmus. Lutfen tekrar baslayin.",
+        )
+    if payload.get("purpose") != REGISTRATION_TOKEN_PURPOSE or not payload.get("phone"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Gecersiz dogrulama oturumu."
+        )
+    return payload["phone"]
+
+
 def set_auth_cookie(response: Response, token: str) -> None:
     response.set_cookie(
         key=ACCESS_TOKEN_COOKIE_NAME,
