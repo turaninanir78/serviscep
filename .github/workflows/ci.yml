@@ -98,3 +98,31 @@ jobs:
         run: npm run build
         env:
           NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
+
+  mobile:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # --ci: jest'i etkilesimli olmayan, CI'a uygun modda calistirir (orn.
+      # eksik snapshot'lari otomatik olusturmak yerine basarisiz sayar).
+      - name: Run jest suite
+        run: npm test -- --ci
+
+      # Jest, Babel uzerinden transpile ediyor - tip hatalarini YAKALAMAZ.
+      # Bu adim olmadan bozuk bir tip degisikligi (orn. api.ts'deki bir
+      # fonksiyon imzasi) testler gecse bile fark edilmeden mergelenebilirdi.
+      - name: Type-check
+        run: npm run typecheck
