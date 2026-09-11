@@ -18,6 +18,8 @@ icin, backend container'i once ETKINLESTIRILEREK yeniden baslatilmali:
 Bu calistirma gorev sirasinda GERCEKTEN yapildi ve sonucu gorev ozetinde
 raporlandi - sadece kod okunarak varsayilmadi.
 """
+import random
+import string
 import time
 import uuid
 
@@ -26,7 +28,12 @@ import requests
 
 from app.db import SessionLocal
 from app.models import Tenant, User
-from app.rate_limit import AUTH_LOGIN_RATE_LIMIT, AUTH_REGISTER_RATE_LIMIT, RATE_LIMIT_ENABLED
+from app.rate_limit import (
+    AUTH_LOGIN_RATE_LIMIT,
+    AUTH_REGISTER_RATE_LIMIT,
+    OTP_REQUEST_RATE_LIMIT,
+    RATE_LIMIT_ENABLED,
+)
 
 BASE_URL = "http://localhost:8000"
 
@@ -49,6 +56,7 @@ def _parse_limit_count(limit_string: str) -> int:
 
 LOGIN_LIMIT_COUNT = _parse_limit_count(AUTH_LOGIN_RATE_LIMIT)
 REGISTER_LIMIT_COUNT = _parse_limit_count(AUTH_REGISTER_RATE_LIMIT)
+OTP_REQUEST_LIMIT_COUNT = _parse_limit_count(OTP_REQUEST_RATE_LIMIT)
 
 
 def _attempt_login(email: str) -> int:
@@ -139,3 +147,23 @@ def test_register_has_its_own_looser_limit():
         assert all(s == 201 for s in statuses), statuses
     finally:
         _cleanup_by_emails(emails)
+
+
+def test_password_reset_request_otp_shares_the_otp_request_rate_limit():
+    """POST /auth/password-reset/request-otp, diger OTP istegi
+    endpoint'leriyle (register/request-otp, profile/request-*-otp) AYNI
+    paylasilan OTP_REQUEST_RATE_LIMIT'i kullaniyor (bkz. gorev ozeti -
+    'mevcut slowapi kurulumunu bu uc endpoint'e de uygula'). Kayitsiz bir
+    numara kullaniliyor - anti-enumeration nedeniyle gercek bir kod
+    uretilmese de rate limit decorator'i endpoint seviyesinde calisir."""
+    phone_raw = "05" + "".join(random.choices(string.digits, k=9))
+
+    def _attempt() -> int:
+        return requests.post(
+            "http://localhost:8000/auth/password-reset/request-otp",
+            json={"country_code": "+90", "phone_number": phone_raw},
+        ).status_code
+
+    statuses = [_attempt() for _ in range(OTP_REQUEST_LIMIT_COUNT)]
+    assert all(s == 200 for s in statuses), statuses
+    assert _attempt() == 429

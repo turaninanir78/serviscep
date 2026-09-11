@@ -1,3 +1,4 @@
+import hashlib
 import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -95,6 +96,59 @@ def decode_registration_token(token: str) -> str:
             status_code=status.HTTP_400_BAD_REQUEST, detail="Gecersiz dogrulama oturumu."
         )
     return payload["phone"]
+
+
+# Sifre sifirlama (unuttum) da registration_token ile ayni stateless JWT
+# yaklasimini kullanir - ek bir "pending reset" tablosuna gerek yok. Farkli
+# olan tek sey: bu token'in TEK KULLANIMLIK olmasi gerekiyor (sifre
+# degistirildikten sonra ayni linkin/koddan turetilen token'in tekrar
+# calismasi istenmiyor). Bunu ayri bir "kullanildi" tablosu/sutunu OLMADAN
+# saglamak icin, token'in icine sifrenin o anki hash'inin bir PARMAK IZI
+# (ham hash degil - bcrypt hash'i istemciye dogrudan gondermek gereksiz risk)
+# gomuluyor: /complete asamasinda bu parmak izi kullanicinin O ANKI
+# password_hash'iyla karsilastirilir. Ilk basarili kullanim sifreyi
+# degistirdigi icin parmak izi otomatik olarak eskir - ayni token bir daha
+# ASLA eslesmez (kullanicinin sifresini baska bir yoldan degistirmesi de
+# ayni sekilde token'i geciz kilar - ekstra bir guvenlik faydasi).
+PASSWORD_RESET_TOKEN_PURPOSE = "password_reset"
+PASSWORD_RESET_TOKEN_EXPIRE_MINUTES = 10
+
+
+def _password_fingerprint(password_hash: str) -> str:
+    return hashlib.sha256(password_hash.encode()).hexdigest()
+
+
+def create_password_reset_token(user_id: int, current_password_hash: str) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(minutes=PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)
+    payload = {
+        "purpose": PASSWORD_RESET_TOKEN_PURPOSE,
+        "user_id": user_id,
+        "pwfp": _password_fingerprint(current_password_hash),
+        "exp": expire,
+    }
+    return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+
+
+def decode_password_reset_token(token: str) -> tuple[int, str]:
+    """Gecerliyse (user_id, sifre parmak izi) dondurur, degilse 400."""
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+    except jwt.PyJWTError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Şifre sıfırlama bağlantısının süresi dolmuş. Lütfen tekrar deneyin.",
+        )
+    if payload.get("purpose") != PASSWORD_RESET_TOKEN_PURPOSE or "user_id" not in payload or "pwfp" not in payload:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Geçersiz şifre sıfırlama isteği."
+        )
+    return payload["user_id"], payload["pwfp"]
+
+
+def password_reset_token_is_still_valid(current_password_hash: str, token_fingerprint: str) -> bool:
+    """Token olusturuldugundan beri sifre DEGISMEDIYSE True - bkz. modul
+    ustundeki aciklama (tek-kullanimlik token, ekstra tablo olmadan)."""
+    return _password_fingerprint(current_password_hash) == token_fingerprint
 
 
 def set_auth_cookie(response: Response, token: str) -> None:
