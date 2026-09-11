@@ -115,6 +115,15 @@ class Customer(Base):
     whatsapp_number_hash = Column(String(64), nullable=False)
     display_name = Column(EncryptedString)
     first_seen_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    # KVKK unutulma hakki (bkz. app/api/customers.py::request_customer_deletion) -
+    # ikisi de NULL: hic silinmemis. deletion_requested_at, tenant'in "Veriyi
+    # Sil" aksiyonunu tetikledigi an; deleted_at, anonimlestirmenin
+    # GERCEKTEN tamamlandigi an. Su an ikisi ayni istekte, ayni anda
+    # yaziliyor (islem senkron/geri alinamaz) - ayri tutulmalari, ileride
+    # "once talep, sonra onay/isle" gibi iki adimli bir surece gecilirse
+    # sema degisikligi gerektirmemesi icin.
+    deletion_requested_at = Column(DateTime(timezone=True), nullable=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
 
 
 @event.listens_for(Customer, "before_insert")

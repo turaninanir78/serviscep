@@ -203,6 +203,10 @@ export const api = {
 
   getCustomers: () => request<Customer[]>("/customers"),
 
+  // KVKK unutulma hakki - GERI ALINAMAZ (bkz. backend/app/api/customers.py::request_customer_deletion).
+  requestCustomerDeletion: (id: number) =>
+    request<Customer>(`/customers/${id}/request-deletion`, { method: "POST" }),
+
   getServices: () => request<Service[]>("/services"),
 
   createService: (input: CreateServiceInput) =>
