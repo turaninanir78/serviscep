@@ -6,11 +6,12 @@ Kod, DB'de duz metin degil hash olarak saklanir (app/security.py'deki
 sifre hash'lemeyle ayni bcrypt mekanizmasi) - DB'ye erisen biri gecerli
 kodlari dogrudan okuyamaz.
 """
-import random
+import secrets
 import string
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.models import OtpCode
@@ -35,7 +36,10 @@ OTP_DEBUG_ECHO_ENABLED = ENVIRONMENT != "production"
 
 
 def _generate_code() -> str:
-    return "".join(random.choices(string.digits, k=OTP_CODE_LENGTH))
+    # random.choices() KRIPTOGRAFIK OLARAK GUVENLI DEGIL (Mersenne Twister
+    # tahmin edilebilir) - OTP kodu gibi guvenlik-kritik bir deger icin
+    # `secrets` modulu (os.urandom tabanli, CSPRNG) kullanilir.
+    return "".join(secrets.choice(string.digits) for _ in range(OTP_CODE_LENGTH))
 
 
 def create_otp(db: Session, *, purpose: str, target: str, user_id: int | None = None) -> tuple[OtpCode, str]:
@@ -45,6 +49,16 @@ def create_otp(db: Session, *, purpose: str, target: str, user_id: int | None = 
     GERCEK (mock) gonderim icin kullanir - burada asla loglanmaz/donulmez,
     o sorumluluk cagirana ait.
     """
+    # Ayni (purpose, target) icin esZAMANLI iki istek, ikisi de henuz
+    # commit edilmemisken asagidaki "son X saniyede kod var mi" kontrolunu
+    # AYNI ANDA gecebilir (klasik TOCTOU) - cooldown'u etkisiz kilar.
+    # SELECT ... FOR UPDATE burada yetersiz kalir cunku ilk istekte
+    # kilitlenecek bir satir henuz yok (fantom satir sorunu); bunun yerine
+    # Postgres advisory lock ile ayni (purpose, target) icin TUM
+    # create_otp cagrilarini serilestiriyoruz. Kilit, bu fonksiyonun
+    # sonundaki db.commit() ile (islem bitince otomatik) serbest kalir.
+    db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:lock_key))"), {"lock_key": f"otp:{purpose}:{target}"})
+
     cooldown_cutoff = datetime.now(timezone.utc) - timedelta(seconds=OTP_RESEND_COOLDOWN_SECONDS)
     recent = (
         db.query(OtpCode)
