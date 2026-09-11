@@ -31,6 +31,8 @@ export interface Customer {
   whatsapp_number: string;
   display_name: string | null;
   first_seen_at: string;
+  deletion_requested_at: string | null;
+  deleted_at: string | null;
 }
 
 export interface Service {

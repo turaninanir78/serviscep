@@ -36,6 +36,8 @@ const customers: Customer[] = [
     whatsapp_number: "905551112233",
     display_name: "Elif Demir",
     first_seen_at: "2026-01-01T00:00:00Z",
+    deletion_requested_at: null,
+    deleted_at: null,
   },
 ];
 const appointment: Appointment = {

@@ -16,3 +16,5 @@ class CustomerOut(BaseModel):
     whatsapp_number: str
     display_name: str | None
     first_seen_at: datetime
+    deletion_requested_at: datetime | None
+    deleted_at: datetime | None
