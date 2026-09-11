@@ -69,3 +69,16 @@ export interface AvailabilityRule {
   start_time: string;
   end_time: string;
 }
+
+export interface LegalDocument {
+  id: number;
+  type: string;
+  version: string;
+  content: string;
+  effective_date: string;
+}
+
+export interface ConsentStatus {
+  needs_consent: boolean;
+  pending_documents: LegalDocument[];
+}

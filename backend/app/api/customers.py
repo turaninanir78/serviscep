@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.access_log import log_access
 from app.db import get_db
 from app.models import Customer
 from app.schemas.customer import CustomerCreate, CustomerOut
@@ -50,4 +51,12 @@ def get_customer(
     )
     if customer is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found")
+    log_access(
+        db,
+        tenant_id=auth.tenant_id,
+        user_id=auth.user_id,
+        resource_type="customer",
+        resource_id=customer.id,
+        action="GET",
+    )
     return customer

@@ -10,6 +10,10 @@ class RegisterRequest(BaseModel):
     tenant_name: str
     email: str
     password: str
+    # Kullanim sartlari/aydinlatma metni onayi - bkz. app/legal.py. False
+    # gonderilirse kayit 400 ile reddedilir (varsayilan yok - cagiran taraf
+    # bilerek True gondermeli).
+    accepted_terms: bool
 
 
 class LoginRequest(BaseModel):
@@ -68,6 +72,8 @@ class RegisterCompleteRequest(BaseModel):
     registration_token: str
     tenant_name: str
     password: str
+    # bkz. RegisterRequest.accepted_terms.
+    accepted_terms: bool
 
 
 # --- Profil: sonradan e-posta ekleme ---

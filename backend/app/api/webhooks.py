@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, R
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.crypto import hash_pii_lookup
 from app.db import get_db
 from app.models import Conversation, Customer, Tenant
 
@@ -75,9 +76,14 @@ def _store_inbound_message(db: Session, tenant: Tenant, message: dict, contacts:
     wa_message_id = message.get("id") or _fallback_message_key(tenant.id, from_number, message)
     message_text = message.get("text", {}).get("body")
 
+    # Customer.whatsapp_number sifreli (bkz. app/db_types.py::EncryptedString) -
+    # Fernet non-deterministik oldugu icin dogrudan esitlik sorgusu
+    # calismaz, bunun yerine deterministik hash sutunu kullanilir (bkz.
+    # app/models.py::Customer docstring'i).
+    from_number_hash = hash_pii_lookup(from_number)
     customer = (
         db.query(Customer)
-        .filter(Customer.tenant_id == tenant.id, Customer.whatsapp_number == from_number)
+        .filter(Customer.tenant_id == tenant.id, Customer.whatsapp_number_hash == from_number_hash)
         .first()
     )
     if customer is None:
@@ -100,7 +106,10 @@ def _store_inbound_message(db: Session, tenant: Tenant, message: dict, contacts:
             db.rollback()
             customer = (
                 db.query(Customer)
-                .filter(Customer.tenant_id == tenant.id, Customer.whatsapp_number == from_number)
+                .filter(
+                    Customer.tenant_id == tenant.id,
+                    Customer.whatsapp_number_hash == from_number_hash,
+                )
                 .first()
             )
             if customer is None:

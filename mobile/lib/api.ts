@@ -3,7 +3,9 @@ import type {
   Appointment,
   AvailabilityRule,
   AvailableSlotsResponse,
+  ConsentStatus,
   Customer,
+  LegalDocument,
   Service,
   StaffMember,
   Tenant,
@@ -121,17 +123,35 @@ export const api = {
       body: JSON.stringify({ country_code: countryCode, phone_number: phoneNumber, code }),
     }),
 
-  completeRegister: (registrationToken: string, tenantName: string, password: string) =>
+  completeRegister: (
+    registrationToken: string,
+    tenantName: string,
+    password: string,
+    acceptedTerms: boolean,
+  ) =>
     request<MobileTokenResponse>("/auth/mobile/register/complete", {
       method: "POST",
       body: JSON.stringify({
         registration_token: registrationToken,
         tenant_name: tenantName,
         password,
+        accepted_terms: acceptedTerms,
       }),
     }),
 
   getMe: () => request<User>("/auth/me"),
+
+  // KVKK sozlesme/onay - bkz. backend/app/legal.py. Gercek hukuki metin
+  // YOK, content su an sadece yer tutucu.
+  getLegalDocument: (type: string) => request<LegalDocument>(`/legal/${type}`),
+
+  getConsentStatus: () => request<ConsentStatus>("/legal/consent-status"),
+
+  acceptDocument: (documentId: number) =>
+    request<void>("/legal/accept", {
+      method: "POST",
+      body: JSON.stringify({ document_id: documentId }),
+    }),
 
   requestAddEmailOtp: (email: string) =>
     request<OtpRequestResponse>("/auth/profile/request-email-otp", {

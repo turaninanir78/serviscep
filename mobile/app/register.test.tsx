@@ -7,7 +7,12 @@ import RegisterScreen from "./register";
 
 jest.mock("@/lib/api");
 const mockCompleteRegistration = jest.fn<
-  (registrationToken: string, tenantName: string, password: string) => Promise<void>
+  (
+    registrationToken: string,
+    tenantName: string,
+    password: string,
+    acceptedTerms: boolean,
+  ) => Promise<void>
 >();
 jest.mock("@/lib/auth-context", () => ({
   useAuth: () => ({ completeRegistration: mockCompleteRegistration }),
@@ -55,6 +60,7 @@ describe("RegisterScreen", () => {
 
     fireEvent.changeText(getByTestId("register-tenant-name"), "Test Kuaför");
     fireEvent.changeText(getByTestId("register-password"), "s3cret-pw");
+    fireEvent.press(getByTestId("register-accept-terms"));
     fireEvent.press(getByTestId("register-submit"));
 
     await waitFor(() =>
@@ -62,9 +68,29 @@ describe("RegisterScreen", () => {
         "reg-token-abc",
         "Test Kuaför",
         "s3cret-pw",
+        true,
       ),
     );
     await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith("/(app)/appointments"));
+  });
+
+  test("onay kutusu işaretlenmeden kayıt gönderilemez", async () => {
+    mockedApi.requestRegisterOtp.mockResolvedValue({ message: "ok", debug_code: "123456" });
+    mockedApi.verifyRegisterOtp.mockResolvedValue({ registration_token: "reg-token-abc" });
+
+    const { getByTestId } = render(<RegisterScreen />);
+
+    fireEvent.changeText(getByTestId("register-phone"), "5321234567");
+    fireEvent.press(getByTestId("register-request-otp"));
+    await waitFor(() => expect(getByTestId("register-otp-code")).toBeTruthy());
+
+    fireEvent.changeText(getByTestId("register-otp-code"), "123456");
+    fireEvent.press(getByTestId("register-verify-otp"));
+    await waitFor(() => expect(getByTestId("register-tenant-name")).toBeTruthy());
+
+    fireEvent.press(getByTestId("register-submit"));
+
+    expect(mockCompleteRegistration).not.toHaveBeenCalled();
   });
 
   test("yanlış kod girilirse hata gösterilir, şifre adımına geçilmez", async () => {

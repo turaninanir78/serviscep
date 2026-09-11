@@ -39,7 +39,12 @@ def test_register_sets_httponly_cookie_and_does_not_leak_token_in_body():
     try:
         res = session.post(
             f"{BASE_URL}/auth/register",
-            json={"tenant_name": "Cookie Test Tenant", "email": email, "password": "s3cret-pw"},
+            json={
+                "tenant_name": "Cookie Test Tenant",
+                "email": email,
+                "password": "s3cret-pw",
+                "accepted_terms": True,
+            },
         )
         assert res.status_code == 201
         assert "access_token" not in res.text
@@ -59,7 +64,12 @@ def test_cookie_from_register_grants_access_to_protected_route():
     try:
         session.post(
             f"{BASE_URL}/auth/register",
-            json={"tenant_name": "Cookie Test Tenant", "email": email, "password": "s3cret-pw"},
+            json={
+                "tenant_name": "Cookie Test Tenant",
+                "email": email,
+                "password": "s3cret-pw",
+                "accepted_terms": True,
+            },
         )
 
         me = session.get(f"{BASE_URL}/tenants/me")
@@ -77,7 +87,12 @@ def test_login_with_correct_password_sets_cookie():
     try:
         requests.post(
             f"{BASE_URL}/auth/register",
-            json={"tenant_name": "Cookie Test Tenant", "email": email, "password": "correct-pw"},
+            json={
+                "tenant_name": "Cookie Test Tenant",
+                "email": email,
+                "password": "correct-pw",
+                "accepted_terms": True,
+            },
         )
 
         session = requests.Session()
@@ -97,7 +112,12 @@ def test_login_with_wrong_password_returns_401_and_sets_no_cookie():
     try:
         requests.post(
             f"{BASE_URL}/auth/register",
-            json={"tenant_name": "Cookie Test Tenant", "email": email, "password": "correct-pw"},
+            json={
+                "tenant_name": "Cookie Test Tenant",
+                "email": email,
+                "password": "correct-pw",
+                "accepted_terms": True,
+            },
         )
 
         session = requests.Session()
@@ -121,7 +141,12 @@ def test_logout_clears_cookie_and_blocks_further_access():
         session = requests.Session()
         session.post(
             f"{BASE_URL}/auth/register",
-            json={"tenant_name": "Cookie Test Tenant", "email": email, "password": "correct-pw"},
+            json={
+                "tenant_name": "Cookie Test Tenant",
+                "email": email,
+                "password": "correct-pw",
+                "accepted_terms": True,
+            },
         )
         assert session.get(f"{BASE_URL}/tenants/me").status_code == 200
 

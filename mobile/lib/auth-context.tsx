@@ -23,6 +23,7 @@ interface AuthContextValue {
     registrationToken: string,
     tenantName: string,
     password: string,
+    acceptedTerms: boolean,
   ) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -75,11 +76,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     registrationToken: string,
     tenantNameInput: string,
     password: string,
+    acceptedTerms: boolean,
   ): Promise<void> {
     const { access_token } = await api.completeRegister(
       registrationToken,
       tenantNameInput,
       password,
+      acceptedTerms,
     );
     await setToken(access_token);
     await refreshTenant();

@@ -12,10 +12,13 @@ from sqlalchemy import (
     Text,
     Time,
     UniqueConstraint,
+    event,
     func,
 )
 
+from app.crypto import hash_pii_lookup
 from app.db import Base
+from app.db_types import EncryptedString
 
 
 class Tenant(Base):
@@ -80,16 +83,44 @@ class OtpCode(Base):
 
 
 class Customer(Base):
+    """`whatsapp_number` ve `display_name` KVKK kapsaminda hassas veri
+    sayildigi icin DB'de sifreli saklanir (bkz. app/db_types.py::EncryptedString)
+    - uygulama kodu icin SEFFAF (bu iki alan hala normal Python string'i gibi
+    okunup yazilir, API yanitlari duz metin doner).
+
+    Fernet sifrelemesi non-deterministik oldugu icin `whatsapp_number`
+    uzerinde DOGRUDAN esitlik sorgusu calismaz - bunun yerine
+    `whatsapp_number_hash` (deterministik HMAC, bkz. app/crypto.py::hash_pii_lookup)
+    kullanilir; bu alan hem arama/lookup (orn. gelen WhatsApp mesajini
+    mevcut musteriyle eslestirme, bkz. app/api/webhooks.py) hem de
+    tenant-basina tekillik kisitlamasi (asagidaki UniqueConstraint) icin
+    kullanilir. `_sync_customer_whatsapp_number_hash` event listener'i bu
+    alani `whatsapp_number` her degistiginde otomatik senkronize eder - cagiran
+    kodun hash'i elle hesaplamasina gerek yoktur.
+    """
+
     __tablename__ = "customers"
     __table_args__ = (
         UniqueConstraint("id", "tenant_id", name="uq_customers_id_tenant_id"),
+        UniqueConstraint(
+            "tenant_id",
+            "whatsapp_number_hash",
+            name="uq_customers_tenant_id_whatsapp_number_hash",
+        ),
     )
 
     id = Column(Integer, primary_key=True)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False)
-    whatsapp_number = Column(String(32), nullable=False)
-    display_name = Column(String(255))
+    whatsapp_number = Column(EncryptedString, nullable=False)
+    whatsapp_number_hash = Column(String(64), nullable=False)
+    display_name = Column(EncryptedString)
     first_seen_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+@event.listens_for(Customer, "before_insert")
+@event.listens_for(Customer, "before_update")
+def _sync_customer_whatsapp_number_hash(mapper, connection, target: Customer) -> None:
+    target.whatsapp_number_hash = hash_pii_lookup(target.whatsapp_number)
 
 
 class StaffMember(Base):
@@ -188,3 +219,60 @@ class Conversation(Base):
     message_text = Column(Text)
     wa_message_id = Column(String(255), unique=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class AccessLog(Base):
+    """Kim (tenant_id+user_id), hangi kayda (resource_type+resource_id),
+    ne zaman, hangi islemle eristi - basit bir denetim izi (KVKK'nin
+    hesap verebilirlik/izlenebilirlik gerekliligi icin). Ayrintili bir
+    analiz araci degil; sadece GET/PATCH/DELETE gibi tekil-kayit
+    erisimlerinde app/access_log.py::log_access ile yaziliyor."""
+
+    __tablename__ = "access_logs"
+
+    id = Column(Integer, primary_key=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    resource_type = Column(String(30), nullable=False)
+    resource_id = Column(Integer, nullable=False)
+    action = Column(String(10), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class LegalDocument(Base):
+    """Versiyonlanmis hukuki metin (aydinlatma metni, kullanim sartlari,
+    veri isleme sozlesmesi...). `content` bu gorevde SADECE yer tutucu
+    metin icerir - gercek metin eklenirken kod DEGISMEZ, sadece bu tabloya
+    (`type`'i ayni, `version`'u bir sonraki, `effective_date`'i bugun/ileri
+    bir tarih olan) YENI bir satir eklenir. Ayni turun ayni versiyonunu iki
+    kez eklemeyi engellemek disinda gecmis versiyonlar hicbir zaman
+    silinmez/degistirilmez (bkz. DocumentAcceptance - hangi kullanicinin
+    hangi versiyonu onayladigi kaliciligina dayanir)."""
+
+    __tablename__ = "legal_documents"
+    __table_args__ = (
+        UniqueConstraint("type", "version", name="uq_legal_documents_type_version"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    type = Column(String(50), nullable=False)
+    version = Column(String(20), nullable=False)
+    content = Column(Text, nullable=False)
+    effective_date = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class DocumentAcceptance(Base):
+    """Bir LegalDocument versiyonunun kabul edildigi kaydi. `user_id`
+    nullable: bazi onaylar (ileride) sadece tenant seviyesinde
+    tutulabilir; kayit akisindaki onaylar hem tenant_id hem user_id
+    doludur (bkz. app/legal.py::record_registration_consent)."""
+
+    __tablename__ = "document_acceptances"
+
+    id = Column(Integer, primary_key=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    document_id = Column(Integer, ForeignKey("legal_documents.id"), nullable=False)
+    accepted_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    ip_address = Column(String(45), nullable=True)
