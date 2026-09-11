@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict
 
 
@@ -103,4 +105,40 @@ class ProfileVerifyPhoneRequest(PhoneNumberInput):
 
 class ChangePasswordRequest(BaseModel):
     current_password: str
+    new_password: str
+
+
+# --- Sifre sifirlama (unuttum) ---
+#
+# Kullanicinin telefonu her zaman vardir (kayit zorunlulugu); email
+# opsiyonel bir ek. `channel`, kullanicinin DOGRULANMIS bir email'i de
+# varsa hangi kanaldan kod istedigini bildirmek icin kullanilir - bkz.
+# app/api/auth.py::password_reset_request_otp docstring'i.
+
+
+class PasswordResetRequestOtpRequest(PhoneNumberInput):
+    channel: Literal["sms", "email"] | None = None
+
+
+class PasswordResetRequestOtpResponse(BaseModel):
+    message: str = "ok"
+    # True ise kod HENUZ gonderilmedi - istemci kullaniciya "sms" / "email"
+    # secimi sunup AYNI istegi bu kez `channel` ile tekrar gondermeli.
+    channel_choice_required: bool = False
+    available_channels: list[str] = ["sms"]
+    # SADECE production disinda VE gercekten bir kod uretildiyse dolu -
+    # bkz. app/otp.py::OTP_DEBUG_ECHO_ENABLED.
+    debug_code: str | None = None
+
+
+class PasswordResetVerifyOtpRequest(PhoneNumberInput):
+    code: str
+
+
+class PasswordResetVerifyOtpResponse(BaseModel):
+    reset_token: str
+
+
+class PasswordResetCompleteRequest(BaseModel):
+    reset_token: str
     new_password: str

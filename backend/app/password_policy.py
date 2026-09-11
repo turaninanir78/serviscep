@@ -1,10 +1,7 @@
 """Sifre gucu politikasi - TUM sifre olusturma/degistirme noktalarinda
-(kayit - eski ve telefon+OTP akislari, profilden sifre degistirme)
-`validate_password_strength` cagrilarak MERKEZI olarak uygulanir; kural
-tek yerde tanimli.
-
-Bu projede su an bir sifre-sifirlama (unuttum) akisi YOK - eklenirse ayni
-fonksiyon oradan da cagrilmali.
+(kayit - eski ve telefon+OTP akislari, profilden sifre degistirme, sifre
+sifirlama/unuttum akisi) `validate_password_strength` cagrilarak MERKEZI
+olarak uygulanir; kural tek yerde tanimli.
 """
 from fastapi import HTTPException, status
 

@@ -21,6 +21,11 @@ from app.schemas.auth import (
     LoginRequest,
     MobileTokenResponse,
     OtpRequestResponse,
+    PasswordResetCompleteRequest,
+    PasswordResetRequestOtpRequest,
+    PasswordResetRequestOtpResponse,
+    PasswordResetVerifyOtpRequest,
+    PasswordResetVerifyOtpResponse,
     PhoneNumberInput,
     ProfileAddEmailRequest,
     ProfileVerifyEmailRequest,
@@ -35,10 +40,13 @@ from app.security import (
     AuthContext,
     clear_auth_cookie,
     create_access_token,
+    create_password_reset_token,
     create_registration_token,
+    decode_password_reset_token,
     decode_registration_token,
     get_current_tenant,
     hash_password,
+    password_reset_token_is_still_valid,
     set_auth_cookie,
     verify_password,
 )
@@ -413,6 +421,130 @@ def change_password(
     if not verify_password(payload.current_password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Mevcut sifre yanlis."
+        )
+
+    validate_password_strength(payload.new_password)
+    user.password_hash = hash_password(payload.new_password)
+    db.commit()
+
+
+# --- Sifre sifirlama (unuttum) ---
+#
+# Kayittakiyle AYNI OTP mekanizmasi (app/otp.py::create_otp/verify_otp,
+# secrets tabanli kod uretimi + DB seviyesinde atomik cooldown) farkli bir
+# purpose ("password_reset") ile yeniden kullanilir - burada tekrar
+# uygulanmiyor. Kullanicinin telefonu HER ZAMAN vardir (kayit zorunlulugu);
+# email SADECE profil ekranindan dogrulanarak eklenebildigi icin
+# User.email dolu olmasi = dogrulanmis demektir - ayri bir "verified" bayragi
+# gerekmiyor.
+#
+# Uc adim (kayit akisiyla ayni sekilde bolunmus, bkz. yukarida):
+#   1. request-otp : telefon (+ opsiyonel `channel`) -> kullanicinin
+#                     dogrulanmis email'i YOKSA otomatik SMS'e dusulup kod
+#                     hemen gonderilir; VARSA ve `channel` henuz
+#                     belirtilmemisse kod GONDERILMEDEN sadece iki secenek
+#                     (sms/email) bildirilir - istemci kullaniciya sorup
+#                     AYNI istegi bu kez `channel` ile tekrar atar.
+#                     Guvenlik: kayitli olmayan bir numara icin de "otomatik
+#                     SMS" yanitiyla AYNI sekli donup hesap varligini
+#                     sizdirmiyor (bkz. otp-security-fixes gorev ozeti -
+#                     Duzeltme 3 ile ayni desen), gercek bir kod uretmeden.
+#   2. verify-otp  : telefon + kod -> dogrulanirsa KISA omurlu, TEK
+#                     kullanimlik bir reset_token doner (bkz.
+#                     app/security.py::create_password_reset_token).
+#   3. complete    : reset_token + yeni sifre -> password_policy.py'deki
+#                     mevcut validator cagrilip sifre guncellenir.
+#
+# Web/mobil AYRIMI yok (register/login'in aksine) - bu ucu de giris
+# yapmamis bir kullanici icin calisir, cookie/token DONMEZ (sifre
+# degistikten sonra kullanici normal login ekranindan giris yapar).
+
+
+def _password_reset_otp_target(user_id: int) -> str:
+    return f"user:{user_id}"
+
+
+@router.post("/password-reset/request-otp", response_model=PasswordResetRequestOtpResponse)
+@limiter.limit(OTP_REQUEST_RATE_LIMIT)
+def password_reset_request_otp(
+    request: Request, payload: PasswordResetRequestOtpRequest, db: Session = Depends(get_db)
+) -> PasswordResetRequestOtpResponse:
+    phone = normalize_phone(payload.country_code, payload.phone_number)
+    user = db.query(User).filter(User.phone == phone).first()
+    has_verified_email = user is not None and user.email is not None
+
+    if not has_verified_email:
+        debug_code = None
+        if user is not None:
+            _otp, code = create_otp(
+                db,
+                purpose="password_reset",
+                target=_password_reset_otp_target(user.id),
+                user_id=user.id,
+            )
+            send_sms(phone, f"Servisçep şifre sıfırlama kodunuz: {code} (5 dakika geçerli)")
+            debug_code = code if OTP_DEBUG_ECHO_ENABLED else None
+        return PasswordResetRequestOtpResponse(
+            channel_choice_required=False, available_channels=["sms"], debug_code=debug_code
+        )
+
+    if payload.channel is None:
+        return PasswordResetRequestOtpResponse(
+            channel_choice_required=True, available_channels=["sms", "email"], debug_code=None
+        )
+
+    _otp, code = create_otp(
+        db, purpose="password_reset", target=_password_reset_otp_target(user.id), user_id=user.id
+    )
+    if payload.channel == "sms":
+        send_sms(phone, f"Servisçep şifre sıfırlama kodunuz: {code} (5 dakika geçerli)")
+    else:
+        send_email(
+            user.email,
+            "Servisçep şifre sıfırlama",
+            f"Şifre sıfırlama kodunuz: {code} (5 dakika geçerli)",
+        )
+    return PasswordResetRequestOtpResponse(
+        channel_choice_required=False,
+        available_channels=["sms", "email"],
+        debug_code=code if OTP_DEBUG_ECHO_ENABLED else None,
+    )
+
+
+@router.post("/password-reset/verify-otp", response_model=PasswordResetVerifyOtpResponse)
+@limiter.limit(OTP_VERIFY_RATE_LIMIT)
+def password_reset_verify_otp(
+    request: Request, payload: PasswordResetVerifyOtpRequest, db: Session = Depends(get_db)
+) -> PasswordResetVerifyOtpResponse:
+    phone = normalize_phone(payload.country_code, payload.phone_number)
+    user = db.query(User).filter(User.phone == phone).first()
+    if user is None:
+        # app/otp.py::verify_otp'nin "bulunamadi/suresi dolmus" durumunda
+        # verdigi mesajla BIREBIR AYNI - hesabin var olup olmadigi burada da
+        # sizdirilmiyor.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Kod bulunamadi veya suresi dolmus. Yeni kod isteyin.",
+        )
+
+    verify_otp(
+        db, purpose="password_reset", target=_password_reset_otp_target(user.id), code=payload.code
+    )
+    reset_token = create_password_reset_token(user.id, user.password_hash)
+    return PasswordResetVerifyOtpResponse(reset_token=reset_token)
+
+
+@router.post("/password-reset/complete", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(AUTH_LOGIN_RATE_LIMIT)
+def password_reset_complete(
+    request: Request, payload: PasswordResetCompleteRequest, db: Session = Depends(get_db)
+) -> None:
+    user_id, password_fingerprint = decode_password_reset_token(payload.reset_token)
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None or not password_reset_token_is_still_valid(user.password_hash, password_fingerprint):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Bu şifre sıfırlama bağlantısı geçersiz veya zaten kullanılmış.",
         )
 
     validate_password_strength(payload.new_password)

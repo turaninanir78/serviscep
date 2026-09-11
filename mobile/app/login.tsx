@@ -52,6 +52,9 @@ export default function LoginScreen() {
         onChangeText={setPassword}
         testID="login-password"
       />
+      <Link href="/forgot-password" style={styles.forgotPasswordLink}>
+        Şifremi unuttum
+      </Link>
 
       {error && (
         <Text style={styles.error} testID="login-error">
@@ -100,4 +103,10 @@ const styles = StyleSheet.create({
   buttonText: { color: "#fff", fontWeight: "600", fontSize: 16 },
   error: { color: "#dc2626" },
   link: { textAlign: "center", marginTop: 16, color: "#000", textDecorationLine: "underline" },
+  forgotPasswordLink: {
+    textAlign: "right",
+    fontSize: 12,
+    color: "#71717a",
+    textDecorationLine: "underline",
+  },
 });

@@ -62,6 +62,9 @@ export default function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
             className="w-full rounded border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
           />
+          <a href="/forgot-password" className="block text-right text-xs text-zinc-500 underline dark:text-zinc-400">
+            Şifremi unuttum
+          </a>
         </div>
 
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}

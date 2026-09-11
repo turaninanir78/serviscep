@@ -104,6 +104,16 @@ export interface OtpRequestResponse {
   debug_code: string | null;
 }
 
+export interface PasswordResetRequestOtpResponse {
+  message: string;
+  // true ise kod HENUZ gonderilmedi - kullanicidan "sms" / "email" secimi
+  // isteyip AYNI istegi channel ile tekrar gondermek gerekir (bkz.
+  // backend/app/api/auth.py::password_reset_request_otp).
+  channel_choice_required: boolean;
+  available_channels: ("sms" | "email")[];
+  debug_code: string | null;
+}
+
 export const api = {
   login: (emailOrPhone: string, password: string) =>
     request<void>("/auth/login", {
@@ -190,6 +200,32 @@ export const api = {
     request<void>("/auth/profile/change-password", {
       method: "POST",
       body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+    }),
+
+  // Sifremi unuttum - uc adim (bkz. backend/app/api/auth.py::password_reset_*
+  // endpoint'lerinin ustundeki yorum). `channel` verilmezse: kullanicinin
+  // dogrulanmis email'i yoksa otomatik SMS gonderilir, varsa kod
+  // GONDERILMEDEN sadece secenekler bildirilir (channel_choice_required).
+  requestPasswordResetOtp: (countryCode: string, phoneNumber: string, channel?: "sms" | "email") =>
+    request<PasswordResetRequestOtpResponse>("/auth/password-reset/request-otp", {
+      method: "POST",
+      body: JSON.stringify({
+        country_code: countryCode,
+        phone_number: phoneNumber,
+        ...(channel ? { channel } : {}),
+      }),
+    }),
+
+  verifyPasswordResetOtp: (countryCode: string, phoneNumber: string, code: string) =>
+    request<{ reset_token: string }>("/auth/password-reset/verify-otp", {
+      method: "POST",
+      body: JSON.stringify({ country_code: countryCode, phone_number: phoneNumber, code }),
+    }),
+
+  completePasswordReset: (resetToken: string, newPassword: string) =>
+    request<void>("/auth/password-reset/complete", {
+      method: "POST",
+      body: JSON.stringify({ reset_token: resetToken, new_password: newPassword }),
     }),
 
   getMyTenant: () => request<Tenant>("/tenants/me"),
