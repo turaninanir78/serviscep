@@ -193,6 +193,9 @@ export default function RegisterScreen() {
             onChangeText={setPassword}
             testID="register-password"
           />
+          <Text style={styles.passwordHint}>
+            En az 6 karakter, 1 büyük harf, 1 küçük harf ve 1 özel karakter içermeli.
+          </Text>
 
           <Pressable
             style={styles.checkboxRow}
@@ -302,4 +305,5 @@ const styles = StyleSheet.create({
   checkboxMark: { color: "#fff", fontSize: 13, fontWeight: "700" },
   checkboxLabel: { flex: 1, fontSize: 14, color: "#3f3f46" },
   inlineLink: { textDecorationLine: "underline", color: "#000" },
+  passwordHint: { fontSize: 12, color: "#71717a" },
 });

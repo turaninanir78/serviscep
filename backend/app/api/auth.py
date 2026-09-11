@@ -7,6 +7,7 @@ from app.legal import record_registration_consent
 from app.models import Tenant, User
 from app.notifications import send_email, send_sms
 from app.otp import OTP_DEBUG_ECHO_ENABLED, create_otp, verify_otp
+from app.password_policy import validate_password_strength
 from app.phone import DEFAULT_COUNTRY_CODE, normalize_phone
 from app.rate_limit import (
     AUTH_LOGIN_RATE_LIMIT,
@@ -16,12 +17,14 @@ from app.rate_limit import (
     limiter,
 )
 from app.schemas.auth import (
+    ChangePasswordRequest,
     LoginRequest,
     MobileTokenResponse,
     OtpRequestResponse,
     PhoneNumberInput,
     ProfileAddEmailRequest,
     ProfileVerifyEmailRequest,
+    ProfileVerifyPhoneRequest,
     RegisterCompleteRequest,
     RegisterRequest,
     RegisterVerifyOtpRequest,
@@ -46,6 +49,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 def _create_tenant_and_user(
     db: Session, payload: RegisterRequest, request: Request
 ) -> tuple[Tenant, User]:
+    validate_password_strength(payload.password)
+
     tenant = Tenant(name=payload.tenant_name)
     db.add(tenant)
     db.flush()
@@ -86,6 +91,8 @@ def _create_tenant_and_user_from_phone(
     accepted_terms: bool,
     request: Request,
 ) -> tuple[Tenant, User]:
+    validate_password_strength(password)
+
     tenant = Tenant(name=tenant_name)
     db.add(tenant)
     db.flush()
@@ -305,6 +312,91 @@ def profile_verify_email(
         )
     db.refresh(user)
     return user
+
+
+# --- Profil: telefon degistirme ---
+#
+# E-posta akisiyla ayni ikili yapi (request-otp -> verify-otp), ama telefon
+# zorunlu bir alan oldugu icin SADECE degistirme var - "kaldirma" endpoint'i
+# yok (bkz. app/schemas/auth.py::ProfileVerifyPhoneRequest docstring'i).
+
+
+@router.post("/profile/request-phone-otp", response_model=OtpRequestResponse)
+@limiter.limit(OTP_REQUEST_RATE_LIMIT)
+def profile_request_phone_otp(
+    request: Request,
+    payload: PhoneNumberInput,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(get_current_tenant),
+) -> OtpRequestResponse:
+    phone = normalize_phone(payload.country_code, payload.phone_number)
+
+    if db.query(User).filter(User.phone == phone).first() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Bu telefon numarasi zaten kullaniliyor"
+        )
+
+    _otp, code = create_otp(db, purpose="profile_phone", target=phone, user_id=auth.user_id)
+    send_sms(phone, f"Servisçep dogrulama kodunuz: {code} (5 dakika gecerli)")
+    return OtpRequestResponse(debug_code=code if OTP_DEBUG_ECHO_ENABLED else None)
+
+
+@router.post("/profile/verify-phone-otp", response_model=UserOut)
+@limiter.limit(OTP_VERIFY_RATE_LIMIT)
+def profile_verify_phone_otp(
+    request: Request,
+    payload: ProfileVerifyPhoneRequest,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(get_current_tenant),
+) -> User:
+    phone = normalize_phone(payload.country_code, payload.phone_number)
+    otp = verify_otp(db, purpose="profile_phone", target=phone, code=payload.code)
+    if otp.user_id != auth.user_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Kod hatali.")
+
+    user = db.query(User).filter(User.id == auth.user_id).first()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    user.phone = phone
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Bu telefon numarasi zaten kullaniliyor"
+        )
+    db.refresh(user)
+    return user
+
+
+# --- Profil: sifre degistirme ---
+
+
+@router.post("/profile/change-password", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(AUTH_LOGIN_RATE_LIMIT)
+def change_password(
+    request: Request,
+    payload: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(get_current_tenant),
+) -> None:
+    """Mevcut sifreyi dogrulamadan yeniyi kabul etmez - bu yuzden diger
+    sifre denemesi noktalarindaki (login) ayni IP bazli rate limit burada
+    da uygulaniyor (AUTH_LOGIN_RATE_LIMIT), art arda yanlis "mevcut sifre"
+    denemesiyle kaba-kuvvet saldirisini yavaslatir."""
+    user = db.query(User).filter(User.id == auth.user_id).first()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    if not verify_password(payload.current_password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Mevcut sifre yanlis."
+        )
+
+    validate_password_strength(payload.new_password)
+    user.password_hash = hash_password(payload.new_password)
+    db.commit()
 
 
 # --- Mobil auth ---

@@ -90,7 +90,7 @@ def test_register_complete_without_accepted_terms_is_rejected_and_creates_no_acc
             json={
                 "registration_token": token,
                 "tenant_name": "No Consent Tenant",
-                "password": "s3cret-pw",
+                "password": "S3cret-pw!",
                 "accepted_terms": False,
             },
         )
@@ -114,7 +114,7 @@ def test_old_register_endpoint_also_requires_accepted_terms():
             json={
                 "tenant_name": "Old Flow No Consent",
                 "email": email,
-                "password": "s3cret-pw",
+                "password": "S3cret-pw!",
                 "accepted_terms": False,
             },
         )
@@ -132,7 +132,7 @@ def test_register_complete_with_accepted_terms_records_consent_for_both_required
             json={
                 "registration_token": token,
                 "tenant_name": "Consent Tenant",
-                "password": "s3cret-pw",
+                "password": "S3cret-pw!",
                 "accepted_terms": True,
             },
         )
@@ -173,7 +173,7 @@ def test_new_document_version_makes_existing_acceptance_stale_until_reaccepted()
             json={
                 "registration_token": token,
                 "tenant_name": "Reconsent Tenant",
-                "password": "s3cret-pw",
+                "password": "S3cret-pw!",
                 "accepted_terms": True,
             },
         )

@@ -42,7 +42,7 @@ def test_register_sets_httponly_cookie_and_does_not_leak_token_in_body():
             json={
                 "tenant_name": "Cookie Test Tenant",
                 "email": email,
-                "password": "s3cret-pw",
+                "password": "S3cret-pw!",
                 "accepted_terms": True,
             },
         )
@@ -67,7 +67,7 @@ def test_cookie_from_register_grants_access_to_protected_route():
             json={
                 "tenant_name": "Cookie Test Tenant",
                 "email": email,
-                "password": "s3cret-pw",
+                "password": "S3cret-pw!",
                 "accepted_terms": True,
             },
         )
@@ -90,14 +90,14 @@ def test_login_with_correct_password_sets_cookie():
             json={
                 "tenant_name": "Cookie Test Tenant",
                 "email": email,
-                "password": "correct-pw",
+                "password": "Correct-pw!",
                 "accepted_terms": True,
             },
         )
 
         session = requests.Session()
         res = session.post(
-            f"{BASE_URL}/auth/login", json={"email_or_phone": email, "password": "correct-pw"}
+            f"{BASE_URL}/auth/login", json={"email_or_phone": email, "password": "Correct-pw!"}
         )
         assert res.status_code == 200
         assert "access_token" not in res.text
@@ -115,7 +115,7 @@ def test_login_with_wrong_password_returns_401_and_sets_no_cookie():
             json={
                 "tenant_name": "Cookie Test Tenant",
                 "email": email,
-                "password": "correct-pw",
+                "password": "Correct-pw!",
                 "accepted_terms": True,
             },
         )
@@ -144,7 +144,7 @@ def test_logout_clears_cookie_and_blocks_further_access():
             json={
                 "tenant_name": "Cookie Test Tenant",
                 "email": email,
-                "password": "correct-pw",
+                "password": "Correct-pw!",
                 "accepted_terms": True,
             },
         )

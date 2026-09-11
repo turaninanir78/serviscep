@@ -206,6 +206,9 @@ export default function RegisterPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full rounded border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
               />
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                En az 6 karakter, 1 büyük harf, 1 küçük harf ve 1 özel karakter içermeli.
+              </p>
             </div>
 
             <div className="flex items-start gap-2">

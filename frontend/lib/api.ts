@@ -159,6 +159,8 @@ export const api = {
 
   getMe: () => request<User>("/auth/me"),
 
+  // Ayni akis hem "ilk kez ekleme" hem "degistirme" icin kullaniliyor -
+  // backend kosulsuzca uzerine yaziyor (bkz. backend/app/api/auth.py::profile_verify_email).
   requestAddEmailOtp: (email: string) =>
     request<OtpRequestResponse>("/auth/profile/request-email-otp", {
       method: "POST",
@@ -169,6 +171,25 @@ export const api = {
     request<User>("/auth/profile/verify-email", {
       method: "POST",
       body: JSON.stringify({ email, code }),
+    }),
+
+  // Telefon zorunlu alan oldugu icin sadece DEGISTIRME var, kaldirma yok.
+  requestChangePhoneOtp: (countryCode: string, phoneNumber: string) =>
+    request<OtpRequestResponse>("/auth/profile/request-phone-otp", {
+      method: "POST",
+      body: JSON.stringify({ country_code: countryCode, phone_number: phoneNumber }),
+    }),
+
+  verifyChangePhoneOtp: (countryCode: string, phoneNumber: string, code: string) =>
+    request<User>("/auth/profile/verify-phone-otp", {
+      method: "POST",
+      body: JSON.stringify({ country_code: countryCode, phone_number: phoneNumber, code }),
+    }),
+
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<void>("/auth/profile/change-password", {
+      method: "POST",
+      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
     }),
 
   getMyTenant: () => request<Tenant>("/tenants/me"),

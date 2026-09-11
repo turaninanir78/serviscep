@@ -86,3 +86,21 @@ class ProfileAddEmailRequest(BaseModel):
 class ProfileVerifyEmailRequest(BaseModel):
     email: str
     code: str
+
+
+# --- Profil: telefon degistirme ---
+#
+# E-postanin aksine telefon zorunlu bir alan - bu yuzden sadece
+# DEGISTIRME var, "kaldirma" yok (bkz. gorev ozeti).
+
+
+class ProfileVerifyPhoneRequest(PhoneNumberInput):
+    code: str
+
+
+# --- Profil: sifre degistirme ---
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str

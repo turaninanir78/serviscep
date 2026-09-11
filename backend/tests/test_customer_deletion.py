@@ -48,7 +48,7 @@ def _register_and_get_session(tenant_name: str) -> tuple[requests.Session, str]:
         json={
             "registration_token": registration_token,
             "tenant_name": tenant_name,
-            "password": "s3cret-pw",
+            "password": "S3cret-pw!",
             "accepted_terms": True,
         },
     )

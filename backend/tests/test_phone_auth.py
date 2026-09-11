@@ -100,7 +100,7 @@ def test_full_register_flow_creates_account_with_phone_and_null_email():
     phone_raw = _random_phone_raw()
     try:
         session = requests.Session()
-        complete_res = _register_full_flow(phone_raw, "Telefon Test Tenant", "s3cret-pw", session)
+        complete_res = _register_full_flow(phone_raw, "Telefon Test Tenant", "S3cret-pw!", session)
         assert complete_res.status_code == 201
         assert session.cookies.get("access_token") is not None
 
@@ -190,13 +190,13 @@ def test_login_with_phone_works_regardless_of_leading_zero():
     phone_raw = _random_phone_raw()
     try:
         session = requests.Session()
-        complete_res = _register_full_flow(phone_raw, "Login Phone Tenant", "s3cret-pw", session)
+        complete_res = _register_full_flow(phone_raw, "Login Phone Tenant", "S3cret-pw!", session)
         assert complete_res.status_code == 201
 
         without_zero = phone_raw.lstrip("0")
         res = requests.post(
             f"{BASE_URL}/auth/login",
-            json={"email_or_phone": without_zero, "password": "s3cret-pw"},
+            json={"email_or_phone": without_zero, "password": "S3cret-pw!"},
         )
         assert res.status_code == 200
     finally:
@@ -214,7 +214,7 @@ def test_legacy_email_only_account_still_logs_in_with_email():
             json={
                 "tenant_name": "Legacy Email Tenant",
                 "email": email,
-                "password": "s3cret-pw",
+                "password": "S3cret-pw!",
                 "accepted_terms": True,
             },
         )
@@ -222,7 +222,7 @@ def test_legacy_email_only_account_still_logs_in_with_email():
 
         res = requests.post(
             f"{BASE_URL}/auth/login",
-            json={"email_or_phone": email, "password": "s3cret-pw"},
+            json={"email_or_phone": email, "password": "S3cret-pw!"},
         )
         assert res.status_code == 200
     finally:
@@ -234,7 +234,7 @@ def test_profile_add_email_flow_lets_phone_account_gain_email_login():
     email = _unique_email()
     try:
         session = requests.Session()
-        complete_res = _register_full_flow(phone_raw, "Add Email Tenant", "s3cret-pw", session)
+        complete_res = _register_full_flow(phone_raw, "Add Email Tenant", "S3cret-pw!", session)
         assert complete_res.status_code == 201
 
         req_res = session.post(
@@ -252,13 +252,13 @@ def test_profile_add_email_flow_lets_phone_account_gain_email_login():
         # Artik HEM telefon HEM (yeni eklenen) email ile giris yapilabilmeli.
         login_with_email = requests.post(
             f"{BASE_URL}/auth/login",
-            json={"email_or_phone": email, "password": "s3cret-pw"},
+            json={"email_or_phone": email, "password": "S3cret-pw!"},
         )
         assert login_with_email.status_code == 200
 
         login_with_phone = requests.post(
             f"{BASE_URL}/auth/login",
-            json={"email_or_phone": phone_raw.lstrip("0"), "password": "s3cret-pw"},
+            json={"email_or_phone": phone_raw.lstrip("0"), "password": "S3cret-pw!"},
         )
         assert login_with_phone.status_code == 200
     finally:
@@ -276,7 +276,7 @@ def test_requesting_otp_for_already_registered_phone_returns_409():
     phone_raw = _random_phone_raw()
     try:
         session = requests.Session()
-        complete_res = _register_full_flow(phone_raw, "Duplicate Phone Tenant", "s3cret-pw", session)
+        complete_res = _register_full_flow(phone_raw, "Duplicate Phone Tenant", "S3cret-pw!", session)
         assert complete_res.status_code == 201
 
         res = requests.post(

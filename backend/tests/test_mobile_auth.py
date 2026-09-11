@@ -42,7 +42,7 @@ def test_mobile_register_returns_token_in_body_not_cookie():
             json={
                 "tenant_name": "Mobile Test Tenant",
                 "email": email,
-                "password": "s3cret-pw",
+                "password": "S3cret-pw!",
                 "accepted_terms": True,
             },
         )
@@ -63,14 +63,14 @@ def test_mobile_login_returns_token_in_body_not_cookie():
             json={
                 "tenant_name": "Mobile Test Tenant",
                 "email": email,
-                "password": "correct-pw",
+                "password": "Correct-pw!",
                 "accepted_terms": True,
             },
         )
 
         res = requests.post(
             f"{BASE_URL}/auth/mobile/login",
-            json={"email_or_phone": email, "password": "correct-pw"},
+            json={"email_or_phone": email, "password": "Correct-pw!"},
         )
         assert res.status_code == 200
         body = res.json()
@@ -88,7 +88,7 @@ def test_mobile_login_with_wrong_password_returns_401_and_no_token():
             json={
                 "tenant_name": "Mobile Test Tenant",
                 "email": email,
-                "password": "correct-pw",
+                "password": "Correct-pw!",
                 "accepted_terms": True,
             },
         )
@@ -110,7 +110,7 @@ def test_bearer_token_from_mobile_login_grants_access_to_protected_route():
             json={
                 "tenant_name": "Mobile Bearer Tenant",
                 "email": email,
-                "password": "s3cret-pw",
+                "password": "S3cret-pw!",
                 "accepted_terms": True,
             },
         )
@@ -150,7 +150,7 @@ def test_bearer_token_works_for_a_mutating_endpoint_too():
             json={
                 "tenant_name": "Mobile Appointments Tenant",
                 "email": email,
-                "password": "s3cret-pw",
+                "password": "S3cret-pw!",
                 "accepted_terms": True,
             },
         )
@@ -177,7 +177,7 @@ def test_web_cookie_flow_is_unaffected_by_bearer_support():
             json={
                 "tenant_name": "Web Cookie Still Works Tenant",
                 "email": email,
-                "password": "s3cret-pw",
+                "password": "S3cret-pw!",
                 "accepted_terms": True,
             },
         )
@@ -203,7 +203,7 @@ def test_cookie_takes_precedence_when_both_cookie_and_bearer_header_present():
             json={
                 "tenant_name": "Precedence Test Tenant",
                 "email": email,
-                "password": "s3cret-pw",
+                "password": "S3cret-pw!",
                 "accepted_terms": True,
             },
         )
