@@ -16,6 +16,7 @@ import urllib.request
 
 import pytest
 
+from app.crypto import hash_pii_lookup
 from app.db import SessionLocal
 from app.models import Conversation, Customer, Tenant
 
@@ -188,7 +189,10 @@ def test_known_phone_number_id_message_is_recorded(tenant_with_whatsapp):
 
     customer = (
         db.query(Customer)
-        .filter(Customer.tenant_id == tenant_id, Customer.whatsapp_number == "905551110003")
+        .filter(
+            Customer.tenant_id == tenant_id,
+            Customer.whatsapp_number_hash == hash_pii_lookup("905551110003"),
+        )
         .first()
     )
     assert customer is not None
@@ -453,7 +457,9 @@ def test_duplicate_delivery_with_same_wa_message_id_is_idempotent(tenant_with_wh
         assert len(conversations) == 1
 
         customers = (
-            db.query(Customer).filter(Customer.whatsapp_number == "905551110010").all()
+            db.query(Customer)
+            .filter(Customer.whatsapp_number_hash == hash_pii_lookup("905551110010"))
+            .all()
         )
         assert len(customers) == 1
     finally:
@@ -479,7 +485,11 @@ def test_duplicate_delivery_without_wa_message_id_is_not_deduplicated(tenant_wit
 
     db = SessionLocal()
     try:
-        customer = db.query(Customer).filter(Customer.whatsapp_number == "905551110011").first()
+        customer = (
+            db.query(Customer)
+            .filter(Customer.whatsapp_number_hash == hash_pii_lookup("905551110011"))
+            .first()
+        )
         assert customer is not None
         conversations = (
             db.query(Conversation).filter(Conversation.customer_id == customer.id).all()
@@ -534,7 +544,10 @@ def test_concurrent_new_customer_creation_does_not_return_500(tenant_with_whatsa
 
         customers = (
             db.query(Customer)
-            .filter(Customer.tenant_id == tenant_id, Customer.whatsapp_number == phone_number)
+            .filter(
+                Customer.tenant_id == tenant_id,
+                Customer.whatsapp_number_hash == hash_pii_lookup(phone_number),
+            )
             .all()
         )
         assert len(customers) == 1

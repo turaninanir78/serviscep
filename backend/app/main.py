@@ -13,6 +13,7 @@ from app.api import (
     availability,
     availability_rules,
     customers,
+    legal,
     services,
     staff_members,
     tenants,
@@ -51,6 +52,7 @@ app.include_router(services.router)
 app.include_router(availability_rules.router)
 app.include_router(customers.router)
 app.include_router(appointments.router)
+app.include_router(legal.router)
 app.include_router(availability.router)
 app.include_router(tenants.router)
 app.include_router(webhooks.router)

@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
+import { LegalDocumentModal } from "@/components/LegalDocumentModal";
 import { api } from "@/lib/api";
 import { COUNTRY_CODES, DEFAULT_COUNTRY_CODE } from "@/lib/countryCodes";
 import { describeApiError } from "@/lib/errors";
@@ -20,6 +21,8 @@ export default function RegisterPage() {
   const [code, setCode] = useState("");
   const [tenantName, setTenantName] = useState("");
   const [password, setPassword] = useState("");
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [viewingDocumentType, setViewingDocumentType] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -77,7 +80,7 @@ export default function RegisterPage() {
     setError(null);
     setSubmitting(true);
     try {
-      await api.completeRegister(step.registrationToken, tenantName, password);
+      await api.completeRegister(step.registrationToken, tenantName, password, acceptedTerms);
       router.push("/appointments");
     } catch (err) {
       setError(describeApiError(err));
@@ -205,11 +208,39 @@ export default function RegisterPage() {
               />
             </div>
 
+            <div className="flex items-start gap-2">
+              <input
+                id="acceptedTerms"
+                type="checkbox"
+                checked={acceptedTerms}
+                onChange={(e) => setAcceptedTerms(e.target.checked)}
+                className="mt-0.5"
+              />
+              <label htmlFor="acceptedTerms" className="text-sm text-zinc-700 dark:text-zinc-300">
+                <button
+                  type="button"
+                  onClick={() => setViewingDocumentType("terms_of_service")}
+                  className="underline"
+                >
+                  Kullanım Şartları
+                </button>{" "}
+                ve{" "}
+                <button
+                  type="button"
+                  onClick={() => setViewingDocumentType("privacy_notice")}
+                  className="underline"
+                >
+                  Aydınlatma Metni
+                </button>
+                &apos;ni okudum, kabul ediyorum.
+              </label>
+            </div>
+
             {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || !acceptedTerms}
               className="w-full rounded bg-black px-3 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
             >
               {submitting ? "Kaydediliyor..." : "Kayıt Ol"}
@@ -224,6 +255,13 @@ export default function RegisterPage() {
           </a>
         </p>
       </div>
+
+      {viewingDocumentType && (
+        <LegalDocumentModal
+          type={viewingDocumentType}
+          onClose={() => setViewingDocumentType(null)}
+        />
+      )}
     </div>
   );
 }

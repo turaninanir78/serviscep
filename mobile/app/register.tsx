@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 
+import { LegalDocumentModal } from "@/components/LegalDocumentModal";
 import { api } from "@/lib/api";
 import { COUNTRY_CODES, DEFAULT_COUNTRY_CODE } from "@/lib/countryCodes";
 import { useAuth } from "@/lib/auth-context";
@@ -27,6 +28,8 @@ export default function RegisterScreen() {
   const [code, setCode] = useState("");
   const [tenantName, setTenantName] = useState("");
   const [password, setPassword] = useState("");
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [viewingDocumentType, setViewingDocumentType] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -81,7 +84,7 @@ export default function RegisterScreen() {
     setError(null);
     setSubmitting(true);
     try {
-      await completeRegistration(step.registrationToken, tenantName, password);
+      await completeRegistration(step.registrationToken, tenantName, password, acceptedTerms);
       router.replace("/(app)/appointments");
     } catch (err) {
       setError(describeApiError(err));
@@ -191,6 +194,32 @@ export default function RegisterScreen() {
             testID="register-password"
           />
 
+          <Pressable
+            style={styles.checkboxRow}
+            onPress={() => setAcceptedTerms((v) => !v)}
+            testID="register-accept-terms"
+          >
+            <View style={[styles.checkbox, acceptedTerms && styles.checkboxChecked]}>
+              {acceptedTerms && <Text style={styles.checkboxMark}>✓</Text>}
+            </View>
+            <Text style={styles.checkboxLabel}>
+              <Text
+                style={styles.inlineLink}
+                onPress={() => setViewingDocumentType("terms_of_service")}
+              >
+                Kullanım Şartları
+              </Text>
+              {" ve "}
+              <Text
+                style={styles.inlineLink}
+                onPress={() => setViewingDocumentType("privacy_notice")}
+              >
+                Aydınlatma Metni
+              </Text>
+              {"'ni okudum, kabul ediyorum."}
+            </Text>
+          </Pressable>
+
           {error && (
             <Text style={styles.error} testID="register-error">
               {error}
@@ -198,9 +227,9 @@ export default function RegisterScreen() {
           )}
 
           <Pressable
-            style={[styles.button, submitting && styles.buttonDisabled]}
+            style={[styles.button, (submitting || !acceptedTerms) && styles.buttonDisabled]}
             onPress={handleComplete}
-            disabled={submitting}
+            disabled={submitting || !acceptedTerms}
             testID="register-submit"
           >
             {submitting ? (
@@ -215,6 +244,13 @@ export default function RegisterScreen() {
       <Link href="/login" style={styles.link}>
         Zaten hesabınız var mı? Giriş yapın
       </Link>
+
+      {viewingDocumentType && (
+        <LegalDocumentModal
+          type={viewingDocumentType}
+          onClose={() => setViewingDocumentType(null)}
+        />
+      )}
     </View>
   );
 }
@@ -251,4 +287,19 @@ const styles = StyleSheet.create({
   buttonText: { color: "#fff", fontWeight: "600", fontSize: 16 },
   error: { color: "#dc2626" },
   link: { textAlign: "center", marginTop: 16, color: "#000", textDecorationLine: "underline" },
+  checkboxRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderWidth: 1,
+    borderColor: "#d4d4d8",
+    borderRadius: 4,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 2,
+  },
+  checkboxChecked: { backgroundColor: "#000", borderColor: "#000" },
+  checkboxMark: { color: "#fff", fontSize: 13, fontWeight: "700" },
+  checkboxLabel: { flex: 1, fontSize: 14, color: "#3f3f46" },
+  inlineLink: { textDecorationLine: "underline", color: "#000" },
 });

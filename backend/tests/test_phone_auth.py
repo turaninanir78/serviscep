@@ -91,6 +91,7 @@ def _register_full_flow(phone_raw: str, tenant_name: str, password: str, session
             "registration_token": registration_token,
             "tenant_name": tenant_name,
             "password": password,
+            "accepted_terms": True,
         },
     )
 
@@ -210,7 +211,12 @@ def test_legacy_email_only_account_still_logs_in_with_email():
     try:
         register_res = requests.post(
             f"{BASE_URL}/auth/register",
-            json={"tenant_name": "Legacy Email Tenant", "email": email, "password": "s3cret-pw"},
+            json={
+                "tenant_name": "Legacy Email Tenant",
+                "email": email,
+                "password": "s3cret-pw",
+                "accepted_terms": True,
+            },
         )
         assert register_res.status_code == 201
 

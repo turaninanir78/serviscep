@@ -67,7 +67,12 @@ def _setup_tenant(label: str, whatsapp_number: str) -> tuple[str, TenantContext]
     email = _unique_email(label)
     res = requests.post(
         f"{BASE_URL}/auth/mobile/register",
-        json={"tenant_name": f"Isolation Test Tenant {label}", "email": email, "password": "s3cret-pw"},
+        json={
+            "tenant_name": f"Isolation Test Tenant {label}",
+            "email": email,
+            "password": "s3cret-pw",
+            "accepted_terms": True,
+        },
     )
     assert res.status_code == 201, res.text
     headers = _auth_headers(res.json()["access_token"])

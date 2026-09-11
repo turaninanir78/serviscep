@@ -45,12 +45,37 @@ describe("RegisterPage", () => {
 
     await user.type(screen.getByLabelText("Firma Adı"), "Test Kuaför");
     await user.type(screen.getByLabelText("Şifre"), "s3cret-pw");
-    await user.click(screen.getByRole("button", { name: "Kayıt Ol" }));
+
+    const submitButton = screen.getByRole("button", { name: "Kayıt Ol" });
+    expect(submitButton).toBeDisabled();
+
+    await user.click(screen.getByRole("checkbox"));
+    expect(submitButton).toBeEnabled();
+
+    await user.click(submitButton);
 
     await waitFor(() =>
-      expect(complete).toHaveBeenCalledWith("reg-token-abc", "Test Kuaför", "s3cret-pw"),
+      expect(complete).toHaveBeenCalledWith("reg-token-abc", "Test Kuaför", "s3cret-pw", true),
     );
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/appointments"));
+  });
+
+  test("onay kutusu işaretlenmeden kayıt gönderilemez", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(api, "requestRegisterOtp").mockResolvedValue({ message: "ok", debug_code: "123456" });
+    vi.spyOn(api, "verifyRegisterOtp").mockResolvedValue({ registration_token: "reg-token-abc" });
+    const complete = vi.spyOn(api, "completeRegister");
+
+    render(<RegisterPage />);
+
+    await user.type(screen.getByPlaceholderText("5XX XXX XX XX"), "5321234567");
+    await user.click(screen.getByRole("button", { name: "Kod Gönder" }));
+    await user.type(await screen.findByLabelText("Doğrulama Kodu"), "123456");
+    await user.click(screen.getByRole("button", { name: "Doğrula" }));
+
+    await screen.findByLabelText("Firma Adı");
+    expect(screen.getByRole("button", { name: "Kayıt Ol" })).toBeDisabled();
+    expect(complete).not.toHaveBeenCalled();
   });
 
   test("yanlış kod girilirse hata gösterilir ve şifre adımına geçilmez", async () => {

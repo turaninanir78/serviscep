@@ -127,7 +127,12 @@ def test_register_has_its_own_looser_limit():
         statuses = [
             requests.post(
                 f"{BASE_URL}/auth/register",
-                json={"tenant_name": "Rate Limit Test", "email": email, "password": "s3cret-pw"},
+                json={
+                    "tenant_name": "Rate Limit Test",
+                    "email": email,
+                    "password": "s3cret-pw",
+                    "accepted_terms": True,
+                },
             ).status_code
             for email in emails
         ]

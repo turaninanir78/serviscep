@@ -3,6 +3,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db import get_db
+from app.legal import record_registration_consent
 from app.models import Tenant, User
 from app.notifications import send_email, send_sms
 from app.otp import OTP_DEBUG_ECHO_ENABLED, create_otp, verify_otp
@@ -42,7 +43,9 @@ from app.security import (
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-def _create_tenant_and_user(db: Session, payload: RegisterRequest) -> tuple[Tenant, User]:
+def _create_tenant_and_user(
+    db: Session, payload: RegisterRequest, request: Request
+) -> tuple[Tenant, User]:
     tenant = Tenant(name=payload.tenant_name)
     db.add(tenant)
     db.flush()
@@ -54,6 +57,15 @@ def _create_tenant_and_user(db: Session, payload: RegisterRequest) -> tuple[Tena
         role="owner",
     )
     db.add(user)
+    db.flush()  # consent kaydi icin user.id gerekiyor
+
+    record_registration_consent(
+        db,
+        accepted_terms=payload.accepted_terms,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        request=request,
+    )
 
     try:
         db.commit()
@@ -67,7 +79,12 @@ def _create_tenant_and_user(db: Session, payload: RegisterRequest) -> tuple[Tena
 
 
 def _create_tenant_and_user_from_phone(
-    db: Session, phone: str, tenant_name: str, password: str
+    db: Session,
+    phone: str,
+    tenant_name: str,
+    password: str,
+    accepted_terms: bool,
+    request: Request,
 ) -> tuple[Tenant, User]:
     tenant = Tenant(name=tenant_name)
     db.add(tenant)
@@ -80,6 +97,15 @@ def _create_tenant_and_user_from_phone(
         role="owner",
     )
     db.add(user)
+    db.flush()  # consent kaydi icin user.id gerekiyor
+
+    record_registration_consent(
+        db,
+        accepted_terms=accepted_terms,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        request=request,
+    )
 
     try:
         db.commit()
@@ -129,7 +155,7 @@ def register(request: Request, payload: RegisterRequest, db: Session = Depends(g
     bunun yerine /auth/register/request-otp -> verify-otp -> complete
     ucuncu adimini kullaniyor; bu endpoint SADECE geriye donuk uyumluluk
     (mevcut testler/entegrasyonlar) icin duruyor."""
-    tenant, user = _create_tenant_and_user(db, payload)
+    tenant, user = _create_tenant_and_user(db, payload, request)
     token = create_access_token(user_id=user.id, tenant_id=tenant.id)
     response = Response(status_code=status.HTTP_201_CREATED)
     set_auth_cookie(response, token)
@@ -206,10 +232,12 @@ def register_verify_otp(
 
 
 @router.post("/register/complete", status_code=status.HTTP_201_CREATED)
-def register_complete(payload: RegisterCompleteRequest, db: Session = Depends(get_db)) -> Response:
+def register_complete(
+    request: Request, payload: RegisterCompleteRequest, db: Session = Depends(get_db)
+) -> Response:
     phone = decode_registration_token(payload.registration_token)
     tenant, user = _create_tenant_and_user_from_phone(
-        db, phone, payload.tenant_name, payload.password
+        db, phone, payload.tenant_name, payload.password, payload.accepted_terms, request
     )
     token = create_access_token(user_id=user.id, tenant_id=tenant.id)
     response = Response(status_code=status.HTTP_201_CREATED)
@@ -309,7 +337,7 @@ def register_mobile(
 ) -> MobileTokenResponse:
     """Eski (dogrudan email+sifre) mobil kayit akisi - bkz. register()
     docstring'i, mobil karsiligi."""
-    tenant, user = _create_tenant_and_user(db, payload)
+    tenant, user = _create_tenant_and_user(db, payload, request)
     token = create_access_token(user_id=user.id, tenant_id=tenant.id)
     return MobileTokenResponse(access_token=token)
 
@@ -330,11 +358,11 @@ def login_mobile(
     response_model=MobileTokenResponse,
 )
 def register_complete_mobile(
-    payload: RegisterCompleteRequest, db: Session = Depends(get_db)
+    request: Request, payload: RegisterCompleteRequest, db: Session = Depends(get_db)
 ) -> MobileTokenResponse:
     phone = decode_registration_token(payload.registration_token)
     tenant, user = _create_tenant_and_user_from_phone(
-        db, phone, payload.tenant_name, payload.password
+        db, phone, payload.tenant_name, payload.password, payload.accepted_terms, request
     )
     token = create_access_token(user_id=user.id, tenant_id=tenant.id)
     return MobileTokenResponse(access_token=token)

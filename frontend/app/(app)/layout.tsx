@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+import { LegalDocumentModal } from "@/components/LegalDocumentModal";
 import { api } from "@/lib/api";
+import type { LegalDocument } from "@/lib/types";
 
 const NAV_LINKS = [
   { href: "/appointments", label: "Randevular" },
@@ -19,6 +21,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [ready, setReady] = useState(false);
   const [tenantName, setTenantName] = useState<string | null>(null);
+  const [pendingDocuments, setPendingDocuments] = useState<LegalDocument[]>([]);
+  const [viewingDocumentType, setViewingDocumentType] = useState<string | null>(null);
+  const [accepting, setAccepting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -31,10 +36,23 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     // /login'e yonlendirilir.
     api
       .getMyTenant()
-      .then((tenant) => {
+      .then(async (tenant) => {
         if (cancelled) return;
         setTenantName(tenant.name);
-        setReady(true);
+
+        // Bir hukuki dokuman yeni bir versiyona guncellenmisse (bkz.
+        // backend/app/legal.py), kullaniciyi panele sokmadan once
+        // onaylatmasi gerekiyor - basit bir tetikleme mantigi: durum
+        // alinamazsa (orn. gecici bir hata) kullaniciyi KILITLEMIYORUZ,
+        // sessizce devam ediyoruz.
+        try {
+          const status = await api.getConsentStatus();
+          if (!cancelled) setPendingDocuments(status.pending_documents);
+        } catch {
+          // yut - asagida aciklandigi gibi
+        }
+
+        if (!cancelled) setReady(true);
       })
       .catch(() => {
         if (cancelled) return;
@@ -56,10 +74,70 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }
   }
 
+  async function handleAcceptPendingDocuments() {
+    setAccepting(true);
+    try {
+      for (const document of pendingDocuments) {
+        await api.acceptDocument(document.id);
+      }
+      setPendingDocuments([]);
+    } finally {
+      setAccepting(false);
+    }
+  }
+
   if (!ready) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-black">
         <p className="text-sm text-zinc-500 dark:text-zinc-400">Yükleniyor...</p>
+      </div>
+    );
+  }
+
+  if (pendingDocuments.length > 0) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 dark:bg-black">
+        <div className="w-full max-w-md space-y-4 rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950">
+          <h1 className="text-lg font-semibold text-black dark:text-zinc-50">
+            Güncellenen şartları onaylayın
+          </h1>
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            Devam etmeden önce aşağıdaki güncellenen belgeleri onaylamanız gerekiyor.
+          </p>
+          <ul className="space-y-1">
+            {pendingDocuments.map((document) => (
+              <li key={document.id}>
+                <button
+                  type="button"
+                  onClick={() => setViewingDocumentType(document.type)}
+                  className="text-sm text-black underline dark:text-zinc-50"
+                >
+                  {document.type} ({document.version})
+                </button>
+              </li>
+            ))}
+          </ul>
+          <button
+            onClick={handleAcceptPendingDocuments}
+            disabled={accepting}
+            className="w-full rounded bg-black px-3 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
+          >
+            {accepting ? "Kaydediliyor..." : "Kabul Ediyorum"}
+          </button>
+          <button
+            onClick={handleLogout}
+            className="w-full text-sm text-zinc-500 underline dark:text-zinc-400"
+          >
+            Çıkış Yap
+          </button>
+        </div>
+
+        {viewingDocumentType && (
+          <LegalDocumentModal
+            type={viewingDocumentType}
+            onClose={() => setViewingDocumentType(null)}
+          />
+        )}
       </div>
     );
   }

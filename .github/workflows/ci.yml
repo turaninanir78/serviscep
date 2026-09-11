@@ -38,6 +38,7 @@ jobs:
       DATABASE_URL: postgresql://serviscep:ci-test-password@localhost:5432/serviscep
       JWT_SECRET_KEY: ci-test-jwt-secret-do-not-use-in-prod
       WHATSAPP_TOKEN_ENCRYPTION_KEY: KTsQ0-_aVcETaWpV3ViLder3yZgFymxgyC7oDvEBVeM=
+      PII_ENCRYPTION_KEY: Ly1msJHMZKqcSzS7mrjC-MCLRLtyQR06TuYqaeBlEFA=
       WHATSAPP_APP_SECRET: ci-test-app-secret
       WHATSAPP_WEBHOOK_VERIFY_TOKEN: ci-test-verify-token
       COOKIE_SECURE: "false"
