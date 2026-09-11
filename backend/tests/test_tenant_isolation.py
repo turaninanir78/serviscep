@@ -70,7 +70,7 @@ def _setup_tenant(label: str, whatsapp_number: str) -> tuple[str, TenantContext]
         json={
             "tenant_name": f"Isolation Test Tenant {label}",
             "email": email,
-            "password": "s3cret-pw",
+            "password": "S3cret-pw!",
             "accepted_terms": True,
         },
     )

@@ -130,7 +130,7 @@ def test_register_has_its_own_looser_limit():
                 json={
                     "tenant_name": "Rate Limit Test",
                     "email": email,
-                    "password": "s3cret-pw",
+                    "password": "S3cret-pw!",
                     "accepted_terms": True,
                 },
             ).status_code
