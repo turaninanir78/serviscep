@@ -5,6 +5,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
+    Index,
     Integer,
     Numeric,
     SmallInteger,
@@ -14,6 +15,7 @@ from sqlalchemy import (
     UniqueConstraint,
     event,
     func,
+    text,
 )
 
 from app.crypto import hash_pii_lookup
@@ -285,3 +287,156 @@ class DocumentAcceptance(Base):
     document_id = Column(Integer, ForeignKey("legal_documents.id"), nullable=False)
     accepted_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     ip_address = Column(String(45), nullable=True)
+
+
+# --- Personel / cok kullanicili tenant uyeligi (sema iskeleti) ---
+#
+# Asagidaki uc model, "ServisCep Personel / Coklu Kullanici Tasarimi -
+# Mimari Degerlendirme" gorev ozetindeki onerilen modeli uyguluyor. Bu
+# gorev SADECE semayi ekliyor - auth/JWT akisi, davet gonderme/kabul
+# etme endpoint'leri, yetki kontrolleri (orn. get_current_tenant'in
+# aktif membership'i dogrulamasi) ve web/mobil ekranlari HENUZ
+# eklenmedi. Mevcut User.role/Tenant iliskisi de bu gorevde
+# DEGISTIRILMEDI - bir sonraki asamada bu tablolar devreye alinirken
+# birlikte ele alinmali.
+
+
+class TenantMembership(Base):
+    """Bir kullanicinin bir tenant'taki ROLU ve DURUMU - "hangi tenant'a
+    aitim" bilgisi artik User/Tenant uzerine degil, buraya kuruluyor.
+    Boylece bir kisinin KENDI tenant'i (owner oldugu, verinin kalici
+    sahibi) ile SU AN calistigi isletme (staff oldugu) birbirinden
+    ayrisiyor; tenant'in kendisine bir role veya parent_tenant_id
+    yuklenmiyor (bkz. gorev ozetindeki mimari gerekce).
+
+    `staff_member_id`: SADECE role="staff" icin doludur - hangi
+    StaffMember (randevu kaynagi) kaydina karsilik geldigini gosterir.
+    Composite FK (staff_member_id, tenant_id) sayesinde baglanti
+    KESINLIKLE ayni tenant'a ait bir StaffMember'a kurulabilir; nullable
+    oldugu icin owner kayitlarinda (staff_member_id NULL) Postgres'in
+    varsayilan MATCH SIMPLE davranisiyla FK kontrolu devre disi kalir.
+
+    `status`: "active" (su an gecerli) / "left" (ayrilmis - kayit
+    SILINMEZ, gecmis/rapor butunlugu icin DB'de kalir, bkz. gorev
+    ozeti). Asagidaki iki kismi (partial) unique index, gorev
+    ozetindeki iki kurali DB seviyesinde garanti eder:
+      1. Bir kullanicinin ayni tenant'ta ayni anda birden fazla AKTIF
+         uyeligi olamaz.
+      2. Bir kullanicinin ayni anda (FARKLI tenant'larda bile) birden
+         fazla AKTIF "staff" uyeligi olamaz.
+    """
+
+    __tablename__ = "tenant_memberships"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["staff_member_id", "tenant_id"],
+            ["staff_members.id", "staff_members.tenant_id"],
+            name="fk_tenant_memberships_staff_member_id_tenant_id",
+        ),
+        CheckConstraint("role IN ('owner', 'staff')", name="ck_tenant_memberships_role"),
+        CheckConstraint("status IN ('active', 'left')", name="ck_tenant_memberships_status"),
+        Index(
+            "uq_tenant_memberships_one_active_per_user_tenant",
+            "user_id",
+            "tenant_id",
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+        ),
+        Index(
+            "uq_tenant_memberships_one_active_staff_per_user",
+            "user_id",
+            unique=True,
+            postgresql_where=text("role = 'staff' AND status = 'active'"),
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    tenant_id = Column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    role = Column(String(20), nullable=False)
+    staff_member_id = Column(Integer, nullable=True)
+    status = Column(String(20), nullable=False, server_default="active")
+    joined_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    left_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class StaffInvitation(Base):
+    """Bir tenant'in bir telefon numarasina gonderdigi personel (staff)
+    davetiyesi. `token_hash`, davetin TEK KULLANIMLIK kabul
+    edilebilmesini saglayan gizli bir degerin hash'idir (OTP kodlarindaki
+    ayni bcrypt yaklasimi, bkz. app/security.py::hash_password/
+    verify_password) - gercek kabul akisi (bu gorevde eklenmiyor)
+    muhtemelen telefonun hala ayni dogrulanmis kullaniciya ait oldugunu
+    AYRICA bir OTP ile de kontrol edecek (bkz. gorev ozeti).
+
+    `invited_by_user_id`: davet gonderen kullanici (admin/owner) - bu
+    kullanicinin GERCEKTEN `tenant_id`'nin yetkilisi olup olmadigi
+    composite bir FK ile DB seviyesinde dogrulanamaz (User tablosunda
+    (id, tenant_id) tekillik kisitlamasi yok) - bu kontrol, davet
+    gonderilirken VE kabul edilirken uygulama katmaninda tekrar
+    yapilmali (bkz. gorev ozeti - "davet eden adminin yetkisi ... tekrar
+    kontrol edilmelidir").
+    """
+
+    __tablename__ = "staff_invitations"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'accepted', 'expired', 'revoked')",
+            name="ck_staff_invitations_status",
+        ),
+        Index(
+            "uq_staff_invitations_one_pending_per_tenant_phone",
+            "tenant_id",
+            "phone",
+            unique=True,
+            postgresql_where=text("status = 'pending'"),
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    invited_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    phone = Column(String(20), nullable=False)
+    status = Column(String(20), nullable=False, server_default="pending")
+    token_hash = Column(String(255), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    accepted_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class StaffServiceAssignment(Base):
+    """Bir StaffMember'in hangi Service'i verdigini belirtir - ortak
+    hizmet kataloguyla (Service) personelin KENDI fiyat/sure sapmasini
+    ayirir (bkz. gorev ozeti - iki personel ayni hizmeti farkli fiyatla
+    verebilmeli, biri degistirince digeri etkilenmemeli).
+    `price_override`/`duration_override` NULL ise Service'in varsayilan
+    degeri kullanilir - bu yorumlama uygulama katmaninda yapilir, bu
+    gorev sadece semayi ekliyor."""
+
+    __tablename__ = "staff_service_assignments"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["staff_member_id", "tenant_id"],
+            ["staff_members.id", "staff_members.tenant_id"],
+            name="fk_staff_service_assignments_staff_member_id_tenant_id",
+        ),
+        ForeignKeyConstraint(
+            ["service_id", "tenant_id"],
+            ["services.id", "services.tenant_id"],
+            name="fk_staff_service_assignments_service_id_tenant_id",
+        ),
+        UniqueConstraint(
+            "staff_member_id",
+            "service_id",
+            name="uq_staff_service_assignments_staff_member_id_service_id",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    staff_member_id = Column(Integer, nullable=False)
+    service_id = Column(Integer, nullable=False)
+    price_override = Column(Numeric(10, 2), nullable=True)
+    duration_override = Column(Integer, nullable=True)
+    is_active = Column(Boolean, nullable=False, server_default="true")
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
