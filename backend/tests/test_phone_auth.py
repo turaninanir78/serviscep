@@ -272,7 +272,11 @@ def test_profile_email_endpoints_require_authentication():
     assert res.status_code == 401
 
 
-def test_requesting_otp_for_already_registered_phone_returns_409():
+def test_requesting_otp_for_already_registered_phone_does_not_leak_registration_status():
+    """Guvenlik duzeltmesi: kayitli bir numara icin OTP istemek, kayitsiz
+    bir numarayla AYNI 200 yanitini dondurmeli (eskiden 409 donerek
+    numaranin kayitli olup olmadigini disariya sizdiriyordu) - ayrica
+    gercek/kullanilabilir bir OTP da uretilmemeli (debug_code None)."""
     phone_raw = _random_phone_raw()
     try:
         session = requests.Session()
@@ -283,6 +287,7 @@ def test_requesting_otp_for_already_registered_phone_returns_409():
             f"{BASE_URL}/auth/register/request-otp",
             json={"country_code": COUNTRY_CODE, "phone_number": phone_raw},
         )
-        assert res.status_code == 409
+        assert res.status_code == 200
+        assert res.json()["debug_code"] is None
     finally:
         _cleanup_by_phone(phone_raw)

@@ -235,9 +235,14 @@ def register_request_otp(
     phone = normalize_phone(payload.country_code, payload.phone_number)
 
     if db.query(User).filter(User.phone == phone).first() is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="Bu telefon numarasi zaten kayitli"
-        )
+        # Guvenlik (bkz. gorev ozeti - Duzeltme 3): bu numaranin zaten
+        # kayitli olup olmadigi disariya (yanit kodu/sekli farkiyla)
+        # SIZDIRILMAMALI - kayitli olmayan durumla AYNI 200 yanitini
+        # doneriz. Gercek bir OTP uretmiyoruz (zaten kullanilamaz, bosuna
+        # cooldown/DB satiri tuketmesin diye) - numara sahibine SADECE
+        # bilgilendirici bir mock mesaj gider.
+        send_sms(phone, "Bu numara zaten kayitli. Giris yapmayi deneyin.")
+        return OtpRequestResponse(debug_code=None)
 
     _otp, code = create_otp(db, purpose="register_phone", target=phone)
     send_sms(phone, f"Servisçep dogrulama kodunuz: {code} (5 dakika gecerli)")
