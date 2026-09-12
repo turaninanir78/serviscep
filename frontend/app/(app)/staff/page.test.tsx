@@ -17,6 +17,8 @@ describe("StaffPage", () => {
       timezone: "Europe/Istanbul",
       my_role: "owner",
       my_permissions: [],
+      my_staff_member_id: null,
+      max_advance_booking_days: null,
     });
   });
 
@@ -178,6 +180,8 @@ describe("StaffPage", () => {
       timezone: "Europe/Istanbul",
       my_role: "staff",
       my_permissions: ["can_view_customers"],
+      my_staff_member_id: 1,
+      max_advance_booking_days: null,
     });
     vi.spyOn(api, "getStaffMembers").mockResolvedValue([baseStaffMember]);
     vi.spyOn(api, "getSentStaffInvitations").mockResolvedValue([]);

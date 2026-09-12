@@ -13,7 +13,7 @@ const NAV_LINKS = [
   { href: "/appointments", label: "Randevular" },
   { href: "/staff", label: "Personel" },
   { href: "/services", label: "Hizmetler" },
-  { href: "/availability", label: "Çalışma Saatleri" },
+  { href: "/availability", label: "Çalışma Planı" },
   { href: "/customers", label: "Müşteriler" },
   { href: "/profile", label: "Hesabım" },
 ];

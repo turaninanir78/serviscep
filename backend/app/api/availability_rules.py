@@ -8,6 +8,7 @@ from app.schemas.availability_rule import (
     AvailabilityRuleCreate,
     AvailabilityRuleOut,
     AvailabilityRuleUpdate,
+    validate_standard_mode_fields,
 )
 from app.security import AuthContext, get_current_tenant
 
@@ -85,6 +86,14 @@ def update_availability_rule(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="start_time must be before end_time",
         )
+
+    try:
+        validate_standard_mode_fields(
+            updates.get("mode", rule.mode),
+            updates.get("slot_duration_minutes", rule.slot_duration_minutes),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
 
     for field, value in updates.items():
         setattr(rule, field, value)

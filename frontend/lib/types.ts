@@ -8,6 +8,11 @@ export interface Tenant {
   // bagimsiz olarak yetki kontrolu yapiyor).
   my_role: string;
   my_permissions: string[];
+  // SADECE my_role="staff" icin dolu - "personel" seçicisini kendi
+  // kaydına kilitlemek icin.
+  my_staff_member_id: number | null;
+  // Randevuların en fazla kaç gün ileriye açılabileceği - null=sınırsız.
+  max_advance_booking_days: number | null;
 }
 
 export interface User {
@@ -58,6 +63,8 @@ export interface StaffMember {
   is_active: boolean;
 }
 
+export type ScheduleMode = "flexible" | "standard";
+
 export interface AvailabilityRule {
   id: number;
   tenant_id: number;
@@ -65,6 +72,21 @@ export interface AvailabilityRule {
   weekday: number;
   start_time: string;
   end_time: string;
+  mode: ScheduleMode;
+  slot_duration_minutes: number | null;
+  gap_minutes: number;
+}
+
+export interface AvailabilityOverride {
+  id: number;
+  tenant_id: number;
+  staff_id: number;
+  date: string;
+  start_time: string;
+  end_time: string;
+  mode: ScheduleMode;
+  slot_duration_minutes: number | null;
+  gap_minutes: number;
 }
 
 export interface AvailableSlotsResponse {

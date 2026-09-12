@@ -2,6 +2,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Column,
+    Date,
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
@@ -33,6 +34,14 @@ class Tenant(Base):
     whatsapp_access_token_encrypted = Column(Text)
     plan_type = Column(String(20), nullable=False, server_default="classic")
     timezone = Column(String(64), nullable=False, server_default="Europe/Istanbul")
+    # Randevularin bugunden itibaren en fazla kac gun ileriye acilabilecegi
+    # (bkz. gorev ozeti - berber=2 gun, klinik=haftalik, vb.). NULL =
+    # sinirsiz (varsayilan, mevcut tum tenant'lar icin davranis degismez).
+    # HER ZAMAN "bugun + N gun" olarak DINAMIK hesaplanir (bkz.
+    # app/services/appointment_service.py::_within_booking_horizon) - sabit
+    # bir tarih olarak SAKLANMAZ, deger degistiginde aninda yeni pencereye
+    # gore acilir.
+    max_advance_booking_days = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
@@ -162,6 +171,15 @@ class Service(Base):
 
 
 class AvailabilityRule(Base):
+    """Haftalik tekrar eden calisma penceresi. `mode`:
+    - "flexible" (varsayilan): slot suresi SECILEN HIZMETIN suresinden
+      gelir (bkz. app/services/appointment_service.py::get_available_slots) -
+      mevcut/eski davranis, hicbir mevcut kural bundan etkilenmez.
+    - "standard": slot suresi hangi hizmet secilirse secilsin
+      `slot_duration_minutes` + `gap_minutes`'ten gelir - "saatte bir
+      randevu, aralara 10 dk bosluk" gibi sabit bir izgarayi zorunlu
+      kilmak icin (bkz. gorev ozeti - klinik/berber ornegi)."""
+
     __tablename__ = "availability_rules"
     __table_args__ = (
         ForeignKeyConstraint(
@@ -169,6 +187,7 @@ class AvailabilityRule(Base):
             ["staff_members.id", "staff_members.tenant_id"],
             name="fk_availability_rules_staff_id_tenant_id",
         ),
+        CheckConstraint("mode IN ('flexible', 'standard')", name="ck_availability_rules_mode"),
     )
 
     id = Column(Integer, primary_key=True)
@@ -177,6 +196,45 @@ class AvailabilityRule(Base):
     weekday = Column(SmallInteger, nullable=False)
     start_time = Column(Time, nullable=False)
     end_time = Column(Time, nullable=False)
+    mode = Column(String(20), nullable=False, server_default="flexible")
+    # SADECE mode="standard" icin doludur.
+    slot_duration_minutes = Column(Integer, nullable=True)
+    gap_minutes = Column(Integer, nullable=False, server_default="0")
+
+
+class AvailabilityOverride(Base):
+    """Haftalik AvailabilityRule sablonunu BOZMADAN, belirli bir TARIHE
+    ozel gecici degisiklik (bkz. gorev ozeti - "arada bir günü
+    değiştirebilsin, değişiklik sadece o güne ait olsun"). Slot hesaplama
+    (get_available_slots) once bu tabloda o (staff_id, date) icin bir
+    kayit olup olmadigina bakar, varsa haftalik sablon YERINE bunu
+    kullanir. "Bunu kalici yap" onaylanirsa, bu satirin kendisi
+    DEGISMEZ - ayni degerlerle AYRICA bir AvailabilityRule satiri
+    olusturulur (bkz. app/api/availability_overrides.py)."""
+
+    __tablename__ = "availability_overrides"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["staff_id", "tenant_id"],
+            ["staff_members.id", "staff_members.tenant_id"],
+            name="fk_availability_overrides_staff_id_tenant_id",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint(
+            "mode IN ('flexible', 'standard')", name="ck_availability_overrides_mode"
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    staff_id = Column(Integer, nullable=False)
+    date = Column(Date, nullable=False)
+    start_time = Column(Time, nullable=False)
+    end_time = Column(Time, nullable=False)
+    mode = Column(String(20), nullable=False, server_default="flexible")
+    slot_duration_minutes = Column(Integer, nullable=True)
+    gap_minutes = Column(Integer, nullable=False, server_default="0")
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
 class Appointment(Base):

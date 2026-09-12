@@ -12,6 +12,8 @@ const tenant: Tenant = {
   timezone: "Europe/Istanbul",
   my_role: "owner",
   my_permissions: [],
+  my_staff_member_id: null,
+  max_advance_booking_days: null,
 };
 
 const customer: Customer = {

@@ -15,7 +15,15 @@ from app.core.availability import (
     has_conflict,
 )
 from app.integrations.whatsapp import send_whatsapp_message
-from app.models import Appointment, AvailabilityRule, Customer, Service, StaffMember, Tenant
+from app.models import (
+    Appointment,
+    AvailabilityOverride,
+    AvailabilityRule,
+    Customer,
+    Service,
+    StaffMember,
+    Tenant,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -120,17 +128,41 @@ def _booked_intervals_for_staff_day(
     ]
 
 
-def get_available_slots(
-    db: Session, tenant_id: int, staff_id: int, service_id: int, target_date: date
-) -> list[datetime]:
-    tenant = _get_tenant(db, tenant_id)
-    _get_staff_or_404(db, staff_id, tenant_id)
-    service = _get_service_or_404(db, service_id, tenant_id)
+def _within_booking_horizon(tenant: Tenant, target_date: date) -> bool:
+    """Randevu acik kalma suresi (bkz. app/models.py::
+    Tenant.max_advance_booking_days) - HER ZAMAN "bugun + N gun" olarak
+    DINAMIK hesaplanir, sabit bir tarih hic saklanmaz - deger
+    degistiginde veya gun ilerledikce pencere otomatik kayar (bkz. gorev
+    ozeti: "o anlık tarihe göre plan açılmalı")."""
+    if tenant.max_advance_booking_days is None:
+        return True
+    today_local = datetime.now(ZoneInfo(tenant.timezone)).date()
+    return target_date <= today_local + timedelta(days=tenant.max_advance_booking_days)
 
-    tz = ZoneInfo(tenant.timezone)
+
+def _rule_rows_for_date(
+    db: Session, tenant_id: int, staff_id: int, target_date: date
+) -> list[AvailabilityRule | AvailabilityOverride]:
+    """O tarihe ozel bir istisna (AvailabilityOverride) varsa haftalik
+    sablon YERINE onu, yoksa haftalik AvailabilityRule'u doner - bkz.
+    app/models.py::AvailabilityOverride docstring'i. Bu oncelik sirasi
+    get_available_slots ile randevu olusturma/erteleme arasinda TUTARLI
+    olmali, aksi halde "musait" gorunen bir slot olusturma anda farkli
+    bir kurala tabi olabilir."""
+    overrides = (
+        db.query(AvailabilityOverride)
+        .filter(
+            AvailabilityOverride.tenant_id == tenant_id,
+            AvailabilityOverride.staff_id == staff_id,
+            AvailabilityOverride.date == target_date,
+        )
+        .all()
+    )
+    if overrides:
+        return overrides
+
     weekday = target_date.weekday()
-
-    rules = (
+    return (
         db.query(AvailabilityRule)
         .filter(
             AvailabilityRule.tenant_id == tenant_id,
@@ -139,23 +171,63 @@ def get_available_slots(
         )
         .all()
     )
+
+
+def _standard_override_from_rows(
+    rule_rows: list[AvailabilityRule | AvailabilityOverride],
+) -> tuple[int, int] | None:
+    """Satirlar arasinda "standard" modda olan varsa (slot_duration_minutes,
+    gap_minutes) dondurur, hepsi "flexible" ise (veya hic satir yoksa) None -
+    bu durumda cagiran taraf KENDI mevcut varsayilan (hizmet suresi/buffer)
+    mantigini DEGISTIRMEDEN kullanmaya devam eder (bkz. gorev ozeti: mevcut
+    kurallar bundan hic etkilenmemeli). Birden fazla satir varsa (ayni gun
+    icin coklu pencere) ilk "standard" satirin degerleri kullanilir - bu
+    gunun TEK bir moda sahip oldugu varsayimina dayanir (UI, ayni gunun tum
+    pencerelerini ayni modda tutacak sekilde tasarlandi)."""
+    standard_row = next((r for r in rule_rows if r.mode == "standard"), None)
+    if standard_row is None:
+        return None
+    return standard_row.slot_duration_minutes, standard_row.gap_minutes
+
+
+def get_available_slots(
+    db: Session, tenant_id: int, staff_id: int, service_id: int, target_date: date
+) -> list[datetime]:
+    tenant = _get_tenant(db, tenant_id)
+    _get_staff_or_404(db, staff_id, tenant_id)
+    service = _get_service_or_404(db, service_id, tenant_id)
+
+    if not _within_booking_horizon(tenant, target_date):
+        return []
+
+    tz = ZoneInfo(tenant.timezone)
+
+    rule_rows = _rule_rows_for_date(db, tenant_id, staff_id, target_date)
     working_windows = [
-        WorkingWindow(start_time=r.start_time, end_time=r.end_time) for r in rules
+        WorkingWindow(start_time=r.start_time, end_time=r.end_time) for r in rule_rows
     ]
+    override = _standard_override_from_rows(rule_rows)
+    if override is not None:
+        duration_minutes, buffer_minutes = override
+    else:
+        duration_minutes, buffer_minutes = service.duration_minutes, service.default_buffer_minutes
 
     booked = _booked_intervals_for_staff_day(db, tenant_id, staff_id, target_date, tz)
 
     # Henuz olusturulmamis bir randevu icin buffer override bilinemez -
-    # bu yuzden hizmetin varsayilan buffer'i kullanilir. Gercek randevu
-    # olusturulurken bu deger override edilebilir (bkz. create_appointment);
-    # bu durumda musait gorunen bir slot, override sonrasi farkli bir
-    # cakisma durumuna yol acabilir - bu bilincli ve tutarli bir varsayimdir.
+    # bu yuzden hizmetin varsayilan buffer'i kullanilir (standard modda
+    # zaten sabit gap_minutes kullanilir, cagiranin override'i gecersiz
+    # sayilir - bkz. _resolve_slot_duration_and_buffer). Gercek randevu
+    # olusturulurken flexible modda bu deger override edilebilir (bkz.
+    # create_appointment); bu durumda musait gorunen bir slot, override
+    # sonrasi farkli bir cakisma durumuna yol acabilir - bu bilincli ve
+    # tutarli bir varsayimdir.
     return compute_available_slots(
         target_date=target_date,
         working_windows=working_windows,
         booked_intervals=booked,
-        duration_minutes=service.duration_minutes,
-        buffer_minutes=service.default_buffer_minutes,
+        duration_minutes=duration_minutes,
+        buffer_minutes=buffer_minutes,
         timezone=tenant.timezone,
     )
 
@@ -187,10 +259,23 @@ def create_appointment(
     else:
         start_at = start_at.astimezone(tz)
 
-    end_at = start_at + timedelta(minutes=service.duration_minutes)
-    effective_buffer_minutes = (
-        buffer_minutes if buffer_minutes is not None else service.default_buffer_minutes
+    if not _within_booking_horizon(tenant, start_at.date()):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Randevular en fazla {tenant.max_advance_booking_days} gün öncesinden alınabilir.",
+        )
+
+    override = _standard_override_from_rows(
+        _rule_rows_for_date(db, tenant_id, staff_id, start_at.date())
     )
+    if override is not None:
+        duration_minutes, effective_buffer_minutes = override
+    else:
+        duration_minutes = service.duration_minutes
+        effective_buffer_minutes = (
+            buffer_minutes if buffer_minutes is not None else service.default_buffer_minutes
+        )
+    end_at = start_at + timedelta(minutes=duration_minutes)
 
     booked = _booked_intervals_for_staff_day(db, tenant_id, staff_id, start_at.date(), tz)
     for interval in booked:
@@ -334,7 +419,20 @@ def reschedule_appointment(
     else:
         new_start_at = start_at.astimezone(tz)
 
-    new_end_at = new_start_at + timedelta(minutes=service.duration_minutes)
+    if not _within_booking_horizon(tenant, new_start_at.date()):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Randevular en fazla {tenant.max_advance_booking_days} gün öncesinden alınabilir.",
+        )
+
+    override = _standard_override_from_rows(
+        _rule_rows_for_date(db, tenant_id, new_staff_id, new_start_at.date())
+    )
+    if override is not None:
+        new_duration_minutes, new_buffer_minutes = override
+    else:
+        new_duration_minutes = service.duration_minutes
+    new_end_at = new_start_at + timedelta(minutes=new_duration_minutes)
 
     # Kendi kaydini disla - aksi halde randevu her zaman kendisiyle
     # "cakisirdi". DB'deki EXCLUDE constraint UPDATE sirasinda satirin eski
