@@ -289,16 +289,18 @@ class DocumentAcceptance(Base):
     ip_address = Column(String(45), nullable=True)
 
 
-# --- Personel / cok kullanicili tenant uyeligi (sema iskeleti) ---
+# --- Personel / cok kullanicili tenant uyeligi ---
 #
 # Asagidaki uc model, "ServisCep Personel / Coklu Kullanici Tasarimi -
-# Mimari Degerlendirme" gorev ozetindeki onerilen modeli uyguluyor. Bu
-# gorev SADECE semayi ekliyor - auth/JWT akisi, davet gonderme/kabul
-# etme endpoint'leri, yetki kontrolleri (orn. get_current_tenant'in
-# aktif membership'i dogrulamasi) ve web/mobil ekranlari HENUZ
-# eklenmedi. Mevcut User.role/Tenant iliskisi de bu gorevde
-# DEGISTIRILMEDI - bir sonraki asamada bu tablolar devreye alinirken
-# birlikte ele alinmali.
+# Mimari Degerlendirme" gorev ozetindeki onerilen modeli uyguluyor.
+# Once (migration 0009) sadece sema eklenmisti; auth/JWT akisi
+# (app/security.py::get_current_tenant, aktif membership'i DB'den
+# cozumluyor), davet gonderme/kabul etme (app/api/staff_invitations.py)
+# ve yetki kontrolleri (app/permissions.py) sonradan devreye alindi.
+# Mevcut User.tenant_id hala "kisinin KENDI tenant'i" anlaminda duruyor
+# (owner membership'i her zaman buna karsilik gelir) - aktif calisma
+# baglami (su an hangi isletme altinda calisiyor) artik BUNDAN degil,
+# TenantMembership'ten okunuyor.
 
 
 class TenantMembership(Base):
@@ -324,6 +326,14 @@ class TenantMembership(Base):
          uyeligi olamaz.
       2. Bir kullanicinin ayni anda (FARKLI tenant'larda bile) birden
          fazla AKTIF "staff" uyeligi olamaz.
+
+    Yetki sutunlari (can_*) SADECE role="staff" satirlari icin anlamli -
+    owner her zaman tam yetkilidir, bu sutunlara hic bakilmaz (bkz.
+    app/permissions.py::require_permission). Granularlik, gorev
+    ozetindeki "her isletmeye uyabilecek esneklik" gerekcesiyle
+    (klinikte hekim sadece gorsun, berberde personel her seyi yonetsin)
+    BILEREK sabit bir "staff" rolu yerine isletme sahibinin her personel
+    icin AYRI AYRI acip kapatabilecegi anahtarlar olarak tasarlandi.
     """
 
     __tablename__ = "tenant_memberships"
@@ -358,16 +368,26 @@ class TenantMembership(Base):
     status = Column(String(20), nullable=False, server_default="active")
     joined_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     left_at = Column(DateTime(timezone=True), nullable=True)
+    can_view_customers = Column(Boolean, nullable=False, server_default="false")
+    can_create_appointments = Column(Boolean, nullable=False, server_default="false")
+    can_cancel_appointments = Column(Boolean, nullable=False, server_default="false")
+    can_confirm_complete_appointments = Column(Boolean, nullable=False, server_default="false")
+    can_manage_availability = Column(Boolean, nullable=False, server_default="false")
+    can_manage_services = Column(Boolean, nullable=False, server_default="false")
 
 
 class StaffInvitation(Base):
     """Bir tenant'in bir telefon numarasina gonderdigi personel (staff)
-    davetiyesi. `token_hash`, davetin TEK KULLANIMLIK kabul
-    edilebilmesini saglayan gizli bir degerin hash'idir (OTP kodlarindaki
-    ayni bcrypt yaklasimi, bkz. app/security.py::hash_password/
-    verify_password) - gercek kabul akisi (bu gorevde eklenmiyor)
-    muhtemelen telefonun hala ayni dogrulanmis kullaniciya ait oldugunu
-    AYRICA bir OTP ile de kontrol edecek (bkz. gorev ozeti).
+    davetiyesi. Kabul/red, davet edilen kisinin KENDI (zaten telefon+OTP
+    ile dogrulanmis) hesabiyla giris yapip bu numarayla eslesen bekleyen
+    davetleri gorup onaylamasiyla olur (bkz. app/api/staff_invitations.py)
+    - kayit sirasinda zaten yapilmis OTP dogrulamasinin USTUNE ayrica bir
+    OTP istenmiyor (gorev ozeti: "zaten uye olup otp dogrulamasi yaptigi
+    icin ayrica bir dogrulamaya gerek yok"). `token_hash` bu yuzden
+    kabul akisinda KULLANILMIYOR - ileride e-posta/SMS uzerinden dogrudan
+    tiklanabilir bir davet linki eklenirse (kisi henuz giris yapmadan)
+    diye sema seviyesinde duruyor, sadece rastgele bir deger ile
+    dolduruluyor.
 
     `invited_by_user_id`: davet gonderen kullanici (admin/owner) - bu
     kullanicinin GERCEKTEN `tenant_id`'nin yetkilisi olup olmadigi

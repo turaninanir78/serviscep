@@ -15,6 +15,7 @@ from app.api import (
     customers,
     legal,
     services,
+    staff_invitations,
     staff_members,
     tenants,
     webhooks,
@@ -48,6 +49,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(staff_members.router)
+app.include_router(staff_invitations.router)
 app.include_router(services.router)
 app.include_router(availability_rules.router)
 app.include_router(customers.router)

@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models import Service
+from app.permissions import require_permission
 from app.schemas.service import ServiceCreate, ServiceOut, ServiceUpdate
 from app.security import AuthContext, get_current_tenant
 
@@ -15,6 +16,7 @@ def create_service(
     db: Session = Depends(get_db),
     auth: AuthContext = Depends(get_current_tenant),
 ):
+    require_permission(auth, "can_manage_services")
     service = Service(tenant_id=auth.tenant_id, **payload.model_dump())
     db.add(service)
     db.commit()
@@ -52,6 +54,7 @@ def update_service(
     db: Session = Depends(get_db),
     auth: AuthContext = Depends(get_current_tenant),
 ):
+    require_permission(auth, "can_manage_services")
     service = (
         db.query(Service)
         .filter(Service.id == service_id, Service.tenant_id == auth.tenant_id)

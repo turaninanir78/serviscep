@@ -6,7 +6,13 @@ import { api, ApiError } from "@/lib/api";
 import type { Customer, Tenant } from "@/lib/types";
 import CustomersPage from "./page";
 
-const tenant: Tenant = { id: 1, name: "Test Kuaförü", timezone: "Europe/Istanbul" };
+const tenant: Tenant = {
+  id: 1,
+  name: "Test Kuaförü",
+  timezone: "Europe/Istanbul",
+  my_role: "owner",
+  my_permissions: [],
+};
 
 const customer: Customer = {
   id: 5,

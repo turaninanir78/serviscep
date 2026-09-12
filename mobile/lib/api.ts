@@ -6,8 +6,12 @@ import type {
   ConsentStatus,
   Customer,
   LegalDocument,
+  PendingStaffInvitation,
   Service,
+  StaffInvitation,
   StaffMember,
+  StaffMembership,
+  StaffPermissionKey,
   Tenant,
   User,
 } from "./types";
@@ -240,6 +244,40 @@ export const api = {
   getServices: () => request<Service[]>("/services"),
 
   getStaffMembers: () => request<StaffMember[]>("/staff_members"),
+
+  // Personel davet + yetki sistemi - web'in frontend/lib/api.ts'teki ayni
+  // fonksiyonlarla PAYLASILAN backend endpoint'lerini cagirir.
+  inviteStaffMember: (countryCode: string, phoneNumber: string) =>
+    request<StaffInvitation>("/staff_invitations", {
+      method: "POST",
+      body: JSON.stringify({ country_code: countryCode, phone_number: phoneNumber }),
+    }),
+
+  getSentStaffInvitations: () => request<StaffInvitation[]>("/staff_invitations"),
+
+  revokeStaffInvitation: (id: number) =>
+    request<StaffInvitation>(`/staff_invitations/${id}/revoke`, { method: "POST" }),
+
+  getPendingInvitationsForMe: () =>
+    request<PendingStaffInvitation[]>("/staff_invitations/pending"),
+
+  acceptStaffInvitation: (id: number) =>
+    request<StaffMembership>(`/staff_invitations/${id}/accept`, { method: "POST" }),
+
+  declineStaffInvitation: (id: number) =>
+    request<void>(`/staff_invitations/${id}/decline`, { method: "POST" }),
+
+  getStaffMembership: (staffId: number) =>
+    request<StaffMembership>(`/staff_members/${staffId}/membership`),
+
+  updateStaffPermissions: (staffId: number, permissions: Partial<Record<StaffPermissionKey, boolean>>) =>
+    request<StaffMembership>(`/staff_members/${staffId}/permissions`, {
+      method: "PATCH",
+      body: JSON.stringify(permissions),
+    }),
+
+  endStaffMembership: (staffId: number) =>
+    request<StaffMember>(`/staff_members/${staffId}/end-membership`, { method: "POST" }),
 
   confirmAppointment: (id: number) =>
     request<Appointment>(`/appointments/${id}/confirm`, { method: "POST" }),
