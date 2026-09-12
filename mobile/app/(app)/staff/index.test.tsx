@@ -30,6 +30,11 @@ jest.mock("expo-router", () => {
   };
 });
 
+// CI'da (yerelden daha yavas/paylasimli runner) FlatList + Modal iceren bu
+// ekranin varsayilan 5000ms Jest timeout'unu asabilmesi - bkz.
+// availability/index.test.tsx'teki ayni onlem.
+jest.setTimeout(15000);
+
 const mockUseAuth = jest.fn();
 jest.mock("@/lib/auth-context", () => ({
   useAuth: () => mockUseAuth(),
