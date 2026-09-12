@@ -18,6 +18,21 @@ class TenantOut(BaseModel):
     # UX icin, guvenlik siniri degil).
     my_role: str = "owner"
     my_permissions: list[str] = []
+    # SADECE my_role="staff" icin doludur - web/mobil arayuzun "personel"
+    # secicisini kendi kaydina kilitleyebilmesi icin (bkz.
+    # app/permissions.py::require_own_staff_resource - asil guvenlik siniri
+    # zaten backend'de, bu SADECE UX).
+    my_staff_member_id: int | None = None
+    # Randevularin bugunden itibaren en fazla kac gun ileriye acilabilecegi -
+    # bkz. app/models.py::Tenant.max_advance_booking_days docstring'i. NULL
+    # = sinirsiz.
+    max_advance_booking_days: int | None = None
+
+
+class TenantBookingSettingsUpdate(BaseModel):
+    # Pozitif bir tamsayi VEYA null (sinirsiz yapmak icin) - bkz.
+    # app/models.py::Tenant.max_advance_booking_days.
+    max_advance_booking_days: int | None = None
 
 
 class TenantWhatsAppConnect(BaseModel):

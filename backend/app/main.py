@@ -11,6 +11,7 @@ from app.api import (
     appointments,
     auth,
     availability,
+    availability_overrides,
     availability_rules,
     customers,
     legal,
@@ -52,6 +53,7 @@ app.include_router(staff_members.router)
 app.include_router(staff_invitations.router)
 app.include_router(services.router)
 app.include_router(availability_rules.router)
+app.include_router(availability_overrides.router)
 app.include_router(customers.router)
 app.include_router(appointments.router)
 app.include_router(legal.router)
