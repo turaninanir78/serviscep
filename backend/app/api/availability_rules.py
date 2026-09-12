@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models import AvailabilityRule, StaffMember
+from app.permissions import require_own_staff_resource, require_permission
 from app.schemas.availability_rule import (
     AvailabilityRuleCreate,
     AvailabilityRuleOut,
@@ -30,6 +31,8 @@ def create_availability_rule(
     db: Session = Depends(get_db),
     auth: AuthContext = Depends(get_current_tenant),
 ):
+    require_permission(auth, "can_manage_availability")
+    require_own_staff_resource(auth, payload.staff_id)
     _get_staff_or_404(db, payload.staff_id, auth.tenant_id)
 
     if payload.start_time >= payload.end_time:
@@ -49,9 +52,10 @@ def create_availability_rule(
 def list_availability_rules(
     db: Session = Depends(get_db), auth: AuthContext = Depends(get_current_tenant)
 ):
-    return (
-        db.query(AvailabilityRule).filter(AvailabilityRule.tenant_id == auth.tenant_id).all()
-    )
+    query = db.query(AvailabilityRule).filter(AvailabilityRule.tenant_id == auth.tenant_id)
+    if auth.role == "staff":
+        query = query.filter(AvailabilityRule.staff_id == auth.staff_member_id)
+    return query.all()
 
 
 @router.patch("/{rule_id}", response_model=AvailabilityRuleOut)
@@ -61,6 +65,7 @@ def update_availability_rule(
     db: Session = Depends(get_db),
     auth: AuthContext = Depends(get_current_tenant),
 ):
+    require_permission(auth, "can_manage_availability")
     rule = (
         db.query(AvailabilityRule)
         .filter(AvailabilityRule.id == rule_id, AvailabilityRule.tenant_id == auth.tenant_id)
@@ -70,6 +75,7 @@ def update_availability_rule(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Availability rule not found"
         )
+    require_own_staff_resource(auth, rule.staff_id)
 
     updates = payload.model_dump(exclude_unset=True)
     new_start = updates.get("start_time", rule.start_time)

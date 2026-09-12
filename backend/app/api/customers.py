@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.access_log import log_access
 from app.db import get_db
 from app.models import Customer
+from app.permissions import require_permission
 from app.schemas.customer import CustomerCreate, CustomerOut
 from app.security import AuthContext, get_current_tenant
 
@@ -44,6 +45,7 @@ def create_customer(
 def list_customers(
     db: Session = Depends(get_db), auth: AuthContext = Depends(get_current_tenant)
 ):
+    require_permission(auth, "can_view_customers")
     # Silinmis (anonimlestirilmis) musteriler normal listede gorunmez -
     # hala DB'de var (randevu gecmisi icin, bkz. request_customer_deletion)
     # ama artik aktif bir musteri degiller. Randevu detayinda
@@ -62,6 +64,7 @@ def get_customer(
     db: Session = Depends(get_db),
     auth: AuthContext = Depends(get_current_tenant),
 ):
+    require_permission(auth, "can_view_customers")
     customer = (
         db.query(Customer)
         .filter(Customer.id == customer_id, Customer.tenant_id == auth.tenant_id)
@@ -101,6 +104,7 @@ def request_customer_deletion(
     kayda tekrar eslesirdi. Silme sonrasi ayni numaradan gelen bir mesaj
     artik YENI bir Customer satiri olusturur - bu dogru davranistir.
     """
+    require_permission(auth, "can_view_customers")
     customer = (
         db.query(Customer)
         .filter(Customer.id == customer_id, Customer.tenant_id == auth.tenant_id)

@@ -19,7 +19,13 @@ def get_my_tenant(
     tenant = db.query(Tenant).filter(Tenant.id == auth.tenant_id).first()
     if tenant is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
-    return tenant
+    return TenantOut(
+        id=tenant.id,
+        name=tenant.name,
+        timezone=tenant.timezone,
+        my_role=auth.role,
+        my_permissions=sorted(auth.permissions),
+    )
 
 
 @router.patch("/me/whatsapp", response_model=TenantWhatsAppConnectResponse)

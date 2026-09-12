@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 
 import { LegalDocumentModal } from "@/components/LegalDocumentModal";
 import { api } from "@/lib/api";
-import type { LegalDocument } from "@/lib/types";
+import { describeApiError } from "@/lib/errors";
+import type { LegalDocument, PendingStaffInvitation } from "@/lib/types";
 
 const NAV_LINKS = [
   { href: "/appointments", label: "Randevular" },
@@ -24,6 +25,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [pendingDocuments, setPendingDocuments] = useState<LegalDocument[]>([]);
   const [viewingDocumentType, setViewingDocumentType] = useState<string | null>(null);
   const [accepting, setAccepting] = useState(false);
+  const [pendingInvitations, setPendingInvitations] = useState<PendingStaffInvitation[]>([]);
+  const [invitationError, setInvitationError] = useState<string | null>(null);
+  const [respondingInvitationId, setRespondingInvitationId] = useState<number | null>(null);
+
+  function loadPendingInvitations() {
+    api
+      .getPendingInvitationsForMe()
+      .then(setPendingInvitations)
+      .catch(() => {
+        // Bekleyen davet YOKSA veya gecici bir hata olursa kullaniciyi
+        // panelden ALIKOYMUYORUZ - bu tamamen opsiyonel bir bildirim.
+      });
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -52,6 +66,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           // yut - asagida aciklandigi gibi
         }
 
+        loadPendingInvitations();
         if (!cancelled) setReady(true);
       })
       .catch(() => {
@@ -71,6 +86,37 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       await api.logout();
     } finally {
       router.replace("/login");
+    }
+  }
+
+  async function handleAcceptInvitation(invitation: PendingStaffInvitation) {
+    setInvitationError(null);
+    setRespondingInvitationId(invitation.id);
+    try {
+      await api.acceptStaffInvitation(invitation.id);
+      // Aktif isletme baglami degisti (bkz. backend/app/security.py::
+      // _resolve_auth_context) - baslikta gorunen isletme adini
+      // GUNCELLEMEK icin tekrar cekiyoruz, ayrica giris yapmaya gerek yok.
+      const tenant = await api.getMyTenant();
+      setTenantName(tenant.name);
+      loadPendingInvitations();
+    } catch (err) {
+      setInvitationError(describeApiError(err));
+    } finally {
+      setRespondingInvitationId(null);
+    }
+  }
+
+  async function handleDeclineInvitation(invitation: PendingStaffInvitation) {
+    setInvitationError(null);
+    setRespondingInvitationId(invitation.id);
+    try {
+      await api.declineStaffInvitation(invitation.id);
+      loadPendingInvitations();
+    } catch (err) {
+      setInvitationError(describeApiError(err));
+    } finally {
+      setRespondingInvitationId(null);
     }
   }
 
@@ -166,6 +212,41 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           ))}
         </nav>
       </header>
+
+      {pendingInvitations.length > 0 && (
+        <div className="space-y-2 border-b border-amber-200 bg-amber-50 px-6 py-3 dark:border-amber-900 dark:bg-amber-950">
+          {invitationError && (
+            <p className="text-sm text-red-600 dark:text-red-400">{invitationError}</p>
+          )}
+          {pendingInvitations.map((invitation) => (
+            <div
+              key={invitation.id}
+              className="flex flex-wrap items-center justify-between gap-2 text-sm text-amber-900 dark:text-amber-200"
+            >
+              <span>
+                <strong>{invitation.tenant_name}</strong> sizi personel olarak davet etti.
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleAcceptInvitation(invitation)}
+                  disabled={respondingInvitationId === invitation.id}
+                  className="rounded bg-black px-3 py-1 text-xs font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
+                >
+                  Kabul Et
+                </button>
+                <button
+                  onClick={() => handleDeclineInvitation(invitation)}
+                  disabled={respondingInvitationId === invitation.id}
+                  className="rounded border border-amber-300 px-3 py-1 text-xs text-amber-900 disabled:opacity-50 dark:border-amber-800 dark:text-amber-200"
+                >
+                  Reddet
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       <main className="flex-1 p-6">{children}</main>
     </div>
   );

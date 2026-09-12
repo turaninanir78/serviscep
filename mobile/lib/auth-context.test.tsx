@@ -63,6 +63,8 @@ describe("AuthProvider / useAuth", () => {
       id: 1,
       name: "Var Olan Kuaför",
       timezone: "America/New_York",
+      my_role: "owner",
+      my_permissions: [],
     });
 
     const { readState } = renderProbe();
@@ -95,6 +97,8 @@ describe("AuthProvider / useAuth", () => {
       id: 2,
       name: "Yeni Kuaför",
       timezone: "Europe/Istanbul",
+      my_role: "owner",
+      my_permissions: [],
     });
 
     const { readState, getByTestId } = renderProbe();
@@ -114,6 +118,8 @@ describe("AuthProvider / useAuth", () => {
       id: 1,
       name: "Kuaför",
       timezone: "Europe/Istanbul",
+      my_role: "owner",
+      my_permissions: [],
     });
 
     const { readState, getByTestId } = renderProbe();

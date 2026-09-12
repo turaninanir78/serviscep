@@ -14,6 +14,12 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   tenantName: string | null;
   tenantTimezone: string;
+  // Aktif calisma baglamindaki rol/yetkiler - bkz. lib/types.ts::Tenant.
+  // Personel davet kabul/red veya isten cikarma sonrasi bunlarin
+  // guncellenmesi icin refreshTenant disari aciliyor.
+  tenantRole: string;
+  tenantPermissions: string[];
+  refreshTenant: () => Promise<void>;
   login: (emailOrPhone: string, password: string) => Promise<void>;
   // Telefon+OTP kaydinin SON adimi - ilk iki adim (kod isteme/dogrulama)
   // henuz bir hesap/oturum olusturmadigi icin auth state'i etkilemiyor,
@@ -35,17 +41,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [tenantName, setTenantName] = useState<string | null>(null);
   const [tenantTimezone, setTenantTimezone] = useState<string>(DEFAULT_TIMEZONE);
+  const [tenantRole, setTenantRole] = useState<string>("owner");
+  const [tenantPermissions, setTenantPermissions] = useState<string[]>([]);
 
   async function refreshTenant(): Promise<void> {
     try {
       const tenant = await api.getMyTenant();
       setTenantName(tenant.name);
       setTenantTimezone(tenant.timezone);
+      setTenantRole(tenant.my_role);
+      setTenantPermissions(tenant.my_permissions);
       setIsAuthenticated(true);
     } catch {
       setIsAuthenticated(false);
       setTenantName(null);
       setTenantTimezone(DEFAULT_TIMEZONE);
+      setTenantRole("owner");
+      setTenantPermissions([]);
     }
   }
 
@@ -96,6 +108,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsAuthenticated(false);
     setTenantName(null);
     setTenantTimezone(DEFAULT_TIMEZONE);
+    setTenantRole("owner");
+    setTenantPermissions([]);
   }
 
   return (
@@ -105,6 +119,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated,
         tenantName,
         tenantTimezone,
+        tenantRole,
+        tenantPermissions,
+        refreshTenant,
         login,
         completeRegistration,
         logout,

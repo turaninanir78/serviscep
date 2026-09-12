@@ -1,11 +1,15 @@
 import hashlib
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
 import jwt
-from fastapi import HTTPException, Request, Response, status
+from fastapi import Depends, HTTPException, Request, Response, status
 from passlib.context import CryptContext
+from sqlalchemy.orm import Session
+
+from app.db import get_db
+from app.models import TenantMembership
 
 JWT_SECRET_KEY = os.environ["JWT_SECRET_KEY"]
 JWT_ALGORITHM = "HS256"
@@ -173,13 +177,88 @@ def clear_auth_cookie(response: Response) -> None:
     response.delete_cookie(key=ACCESS_TOKEN_COOKIE_NAME, path="/")
 
 
+# Personel/coklu-kullanici uyeligi (bkz. app/models.py::TenantMembership)
+# devreye alinirken eklendi - bir "staff" satirinda hangi islemlerin
+# acik/kapali oldugunu belirten sutun adlari. app/permissions.py bu
+# listeyi (dolayisiyla AuthContext.permissions'i) kullanarak yetki
+# kontrolu yapiyor; buradan disari (permissions.py'ye) aktarilan TEK
+# kaynak burasi - iki yerde ayri ayri tanimlanip birbirinden sapmasin
+# diye.
+STAFF_PERMISSIONS: tuple[str, ...] = (
+    "can_view_customers",
+    "can_create_appointments",
+    "can_cancel_appointments",
+    "can_confirm_complete_appointments",
+    "can_manage_availability",
+    "can_manage_services",
+)
+
+
 @dataclass(frozen=True)
 class AuthContext:
     user_id: int
     tenant_id: int
+    # "owner" (kendi isletmesi - varsayilan/legacy davranis) veya "staff"
+    # (bir baska isletmeye davetle baglanmis). Owner HER ZAMAN tam
+    # yetkilidir, asagidaki `permissions` SADECE role="staff" icin
+    # anlamlidir (bkz. app/permissions.py::require_permission).
+    role: str = "owner"
+    # SADECE role="staff" icin doludur - bu kullanicinin o tenant'taki
+    # hangi StaffMember kaydina karsilik geldigini gosterir (bkz.
+    # app/permissions.py::require_own_staff_resource).
+    staff_member_id: int | None = None
+    permissions: frozenset[str] = field(default_factory=frozenset)
 
 
-def get_current_tenant(request: Request) -> AuthContext:
+def _resolve_auth_context(user_id: int, legacy_tenant_id: int, db: Session) -> AuthContext:
+    """JWT SADECE user_id tasir (tenant_id de tasir ama asagida GORMEZDEN
+    GELINIR) - aktif calisma baglami (su an HANGI isletme altinda
+    calisiliyor) her istekte TenantMembership'ten TAZE okunur. Boylece
+    bir davet kabul edildiginde/bir uyelikten ayrilindiginda kullanicinin
+    JWT'si hala gecerliyken (24 saat) bile DEGISIKLIK bir sonraki
+    istekte hemen yansir - yeniden giris yapmasi gerekmez.
+
+    `legacy_tenant_id`, HICBIR aktif TenantMembership satiri bulunamazsa
+    (migration 0011'den ONCEKI bir hesap - olmamali ama garanti olsun
+    diye - veya dogrudan DB fixture'iyle olusturulmus bir test kullanicisi,
+    bkz. ornegin test_appointment_race_condition.py'deki
+    create_access_token(user_id=0, ...) kullanimi) DUSULECEK guvenlik
+    agidir - bu durumda eskisi gibi JWT'deki tenant_id'ye guvenilip
+    "owner" gibi davranilir.
+    """
+    memberships = (
+        db.query(TenantMembership)
+        .filter(TenantMembership.user_id == user_id, TenantMembership.status == "active")
+        .all()
+    )
+    # Bir kullanicinin ayni anda hem KENDI tenant'inda bir owner satiri
+    # HEM baska bir tenant'ta bir staff satiri olabilir (DB kisiti sadece
+    # "en fazla bir aktif staff" ve "tenant basina en fazla bir aktif
+    # uyelik" der, ikisinin BIRLIKTE var olmasini engellemez) - staff
+    # satiri varsa SU AN calisilan isletme odur, yoksa kendi tenant'i.
+    active = next((m for m in memberships if m.role == "staff"), None) or next(
+        (m for m in memberships if m.role == "owner"), None
+    )
+
+    if active is None:
+        return AuthContext(user_id=user_id, tenant_id=legacy_tenant_id, role="owner")
+
+    if active.role != "staff":
+        return AuthContext(user_id=user_id, tenant_id=active.tenant_id, role="owner")
+
+    granted = frozenset(name for name in STAFF_PERMISSIONS if getattr(active, name))
+    return AuthContext(
+        user_id=user_id,
+        tenant_id=active.tenant_id,
+        role="staff",
+        staff_member_id=active.staff_member_id,
+        permissions=granted,
+    )
+
+
+def get_current_tenant(
+    request: Request, db: Session = Depends(get_db)
+) -> AuthContext:
     token = request.cookies.get(ACCESS_TOKEN_COOKIE_NAME)
     if token is None:
         # Mobil app'lerin (React Native) tarayici cookie jar'i yok - token'i
@@ -203,8 +282,11 @@ def get_current_tenant(request: Request) -> AuthContext:
         )
 
     try:
-        return AuthContext(user_id=payload["user_id"], tenant_id=payload["tenant_id"])
+        user_id = payload["user_id"]
+        legacy_tenant_id = payload["tenant_id"]
     except KeyError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload"
         )
+
+    return _resolve_auth_context(user_id, legacy_tenant_id, db)

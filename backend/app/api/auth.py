@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.legal import record_registration_consent
-from app.models import StaffMember, Tenant, User
+from app.models import StaffMember, Tenant, TenantMembership, User
 from app.notifications import send_email, send_sms
 from app.otp import OTP_DEBUG_ECHO_ENABLED, create_otp, verify_otp
 from app.password_policy import validate_password_strength
@@ -68,6 +68,18 @@ def _create_self_staff_member(db: Session, tenant_id: int) -> None:
     db.add(StaffMember(tenant_id=tenant_id, name=DEFAULT_SELF_STAFF_NAME))
 
 
+def _create_owner_membership(db: Session, user_id: int, tenant_id: int) -> None:
+    """Yeni owner icin bir TenantMembership(role="owner") satiri acar -
+    aktif calisma baglaminin (bkz. app/security.py::get_current_tenant)
+    DB'den cozumlenebilmesi icin sart. staff_member_id BILEREK NULL:
+    owner'in "kendisi" olarak isaretlenecek tekil bir StaffMember kaydi
+    yok (yukaridaki "Ben" kaydi normal bir StaffMember gibi yeniden
+    adlandirilip/silinip degistirilebiliyor, ona baglanmak kirilgan
+    olurdu) - owner zaten role="owner" oldugu icin her sey tam yetkili
+    (bkz. app/permissions.py)."""
+    db.add(TenantMembership(user_id=user_id, tenant_id=tenant_id, role="owner", status="active"))
+
+
 def _create_tenant_and_user(
     db: Session, payload: RegisterRequest, request: Request
 ) -> tuple[Tenant, User]:
@@ -86,6 +98,7 @@ def _create_tenant_and_user(
     )
     db.add(user)
     db.flush()  # consent kaydi icin user.id gerekiyor
+    _create_owner_membership(db, user.id, tenant.id)
 
     record_registration_consent(
         db,
@@ -129,6 +142,7 @@ def _create_tenant_and_user_from_phone(
     )
     db.add(user)
     db.flush()  # consent kaydi icin user.id gerekiyor
+    _create_owner_membership(db, user.id, tenant.id)
 
     record_registration_consent(
         db,

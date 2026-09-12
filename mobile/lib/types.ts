@@ -5,6 +5,12 @@ export interface Tenant {
   id: number;
   name: string;
   timezone: string;
+  // Aktif calisma baglamindaki rol - "owner" (kendi isletmesi) veya
+  // "staff" (davetle baglanmis) - bkz. backend/app/security.py::AuthContext.
+  // SADECE arayuzde owner'a ozel bolumleri gizlemek icin (backend zaten
+  // bagimsiz olarak yetki kontrolu yapiyor).
+  my_role: string;
+  my_permissions: string[];
 }
 
 export interface User {
@@ -82,3 +88,40 @@ export interface ConsentStatus {
   needs_consent: boolean;
   pending_documents: LegalDocument[];
 }
+
+export interface StaffInvitation {
+  id: number;
+  tenant_id: number;
+  phone: string;
+  status: string;
+  created_at: string;
+  expires_at: string;
+}
+
+export interface PendingStaffInvitation {
+  id: number;
+  tenant_id: number;
+  tenant_name: string;
+  status: string;
+  created_at: string;
+  expires_at: string;
+}
+
+export interface StaffMembership {
+  staff_member_id: number;
+  role: string;
+  can_view_customers: boolean;
+  can_create_appointments: boolean;
+  can_cancel_appointments: boolean;
+  can_confirm_complete_appointments: boolean;
+  can_manage_availability: boolean;
+  can_manage_services: boolean;
+}
+
+export type StaffPermissionKey =
+  | "can_view_customers"
+  | "can_create_appointments"
+  | "can_cancel_appointments"
+  | "can_confirm_complete_appointments"
+  | "can_manage_availability"
+  | "can_manage_services";
