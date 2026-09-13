@@ -1,12 +1,14 @@
 import { getToken } from "./storage";
 import type {
   Appointment,
+  AvailabilityOverride,
   AvailabilityRule,
   AvailableSlotsResponse,
   ConsentStatus,
   Customer,
   LegalDocument,
   PendingStaffInvitation,
+  ScheduleMode,
   Service,
   StaffInvitation,
   StaffMember,
@@ -91,12 +93,29 @@ export interface CreateAvailabilityRuleInput {
   weekday: number;
   start_time: string;
   end_time: string;
+  mode?: ScheduleMode;
+  slot_duration_minutes?: number | null;
+  gap_minutes?: number;
 }
 
 export interface UpdateAvailabilityRuleInput {
   weekday?: number;
   start_time?: string;
   end_time?: string;
+  mode?: ScheduleMode;
+  slot_duration_minutes?: number | null;
+  gap_minutes?: number;
+}
+
+export interface CreateAvailabilityOverrideInput {
+  staff_id: number;
+  date: string;
+  start_time: string;
+  end_time: string;
+  mode?: ScheduleMode;
+  slot_duration_minutes?: number | null;
+  gap_minutes?: number;
+  apply_to_weekly_template?: boolean;
 }
 
 export interface OtpRequestResponse {
@@ -314,5 +333,25 @@ export const api = {
     request<AvailabilityRule>(`/availability_rules/${id}`, {
       method: "PATCH",
       body: JSON.stringify(input),
+    }),
+
+  getAvailabilityOverrides: (staffId?: number) =>
+    request<AvailabilityOverride[]>(
+      staffId !== undefined ? `/availability_overrides?staff_id=${staffId}` : "/availability_overrides",
+    ),
+
+  createAvailabilityOverride: (input: CreateAvailabilityOverrideInput) =>
+    request<AvailabilityOverride>("/availability_overrides", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+
+  removeAvailabilityOverride: (id: number) =>
+    request<void>(`/availability_overrides/${id}/remove`, { method: "POST" }),
+
+  updateBookingSettings: (maxAdvanceBookingDays: number | null) =>
+    request<Tenant>("/tenants/me/booking-settings", {
+      method: "PATCH",
+      body: JSON.stringify({ max_advance_booking_days: maxAdvanceBookingDays }),
     }),
 };

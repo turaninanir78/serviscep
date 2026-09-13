@@ -5,7 +5,7 @@ const LINKS = [
   { href: "/(app)/appointments" as const, label: "Randevular" },
   { href: "/(app)/staff" as const, label: "Personel" },
   { href: "/(app)/services" as const, label: "Hizmetler" },
-  { href: "/(app)/availability" as const, label: "Müsaitlik" },
+  { href: "/(app)/availability" as const, label: "Çalışma Planı" },
   { href: "/(app)/customers" as const, label: "Müşteriler" },
   { href: "/(app)/profile" as const, label: "Hesabım" },
 ];
