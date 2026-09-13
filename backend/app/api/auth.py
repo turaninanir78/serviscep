@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.legal import record_registration_consent
-from app.models import StaffMember, Tenant, TenantMembership, User
+from app.models import Service, StaffMember, Tenant, TenantMembership, User
 from app.notifications import send_email, send_sms
 from app.otp import OTP_DEBUG_ECHO_ENABLED, create_otp, verify_otp
 from app.password_policy import validate_password_strength
@@ -68,6 +68,27 @@ def _create_self_staff_member(db: Session, tenant_id: int) -> None:
     db.add(StaffMember(tenant_id=tenant_id, name=DEFAULT_SELF_STAFF_NAME))
 
 
+# Randevu olusturmak hem bir StaffMember HEM bir Service gerektirdigi icin
+# (yukaridaki _create_self_staff_member'in giderdigi surtunmenin ayni
+# nedeni), yeni kayit sonrasi da elle "Hizmet Ekle" yapmadan randevu
+# alinabilsin diye ayni mantikla bir varsayilan Service olusturuluyor.
+# Normal bir Service gibi davranir - ozel bir "silinemez" isareti YOK,
+# kullanici PATCH/DELETE /services/{id} ile diledigi gibi degistirebilir.
+DEFAULT_SERVICE_NAME = "Genel Hizmet"
+DEFAULT_SERVICE_DURATION_MINUTES = 30
+
+
+def _create_default_service(db: Session, tenant_id: int) -> None:
+    db.add(
+        Service(
+            tenant_id=tenant_id,
+            name=DEFAULT_SERVICE_NAME,
+            duration_minutes=DEFAULT_SERVICE_DURATION_MINUTES,
+            price=None,
+        )
+    )
+
+
 def _create_owner_membership(db: Session, user_id: int, tenant_id: int) -> None:
     """Yeni owner icin bir TenantMembership(role="owner") satiri acar -
     aktif calisma baglaminin (bkz. app/security.py::get_current_tenant)
@@ -89,6 +110,7 @@ def _create_tenant_and_user(
     db.add(tenant)
     db.flush()
     _create_self_staff_member(db, tenant.id)
+    _create_default_service(db, tenant.id)
 
     user = User(
         tenant_id=tenant.id,
@@ -133,6 +155,7 @@ def _create_tenant_and_user_from_phone(
     db.add(tenant)
     db.flush()
     _create_self_staff_member(db, tenant.id)
+    _create_default_service(db, tenant.id)
 
     user = User(
         tenant_id=tenant.id,
