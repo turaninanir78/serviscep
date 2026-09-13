@@ -65,6 +65,8 @@ describe("AuthProvider / useAuth", () => {
       timezone: "America/New_York",
       my_role: "owner",
       my_permissions: [],
+      my_staff_member_id: null,
+      max_advance_booking_days: null,
     });
 
     const { readState } = renderProbe();
@@ -99,6 +101,8 @@ describe("AuthProvider / useAuth", () => {
       timezone: "Europe/Istanbul",
       my_role: "owner",
       my_permissions: [],
+      my_staff_member_id: null,
+      max_advance_booking_days: null,
     });
 
     const { readState, getByTestId } = renderProbe();
@@ -120,6 +124,8 @@ describe("AuthProvider / useAuth", () => {
       timezone: "Europe/Istanbul",
       my_role: "owner",
       my_permissions: [],
+      my_staff_member_id: null,
+      max_advance_booking_days: null,
     });
 
     const { readState, getByTestId } = renderProbe();

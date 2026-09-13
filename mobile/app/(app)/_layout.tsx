@@ -201,7 +201,7 @@ export default function AppLayout() {
         <Stack.Screen name="appointments/[id]" options={{ title: "Randevu Detayı" }} />
         <Stack.Screen name="staff/index" options={{ title: "Personel" }} />
         <Stack.Screen name="services/index" options={{ title: "Hizmetler" }} />
-        <Stack.Screen name="availability/index" options={{ title: "Müsaitlik" }} />
+        <Stack.Screen name="availability/index" options={{ title: "Çalışma Planı" }} />
         <Stack.Screen name="customers/index" options={{ title: "Müşteriler" }} />
         <Stack.Screen name="customers/[id]" options={{ title: "Müşteri Detayı" }} />
         <Stack.Screen name="profile/index" options={{ title: "Hesabım" }} />
