@@ -30,6 +30,71 @@ describe("AvailabilityPage", () => {
     vi.restoreAllMocks();
   });
 
+  test("varsayılan sekme Çalışma Saatleri'dir, mod seçimi/gelişmiş alanlar görünmez", async () => {
+    render(<AvailabilityPage />);
+    await screen.findByText("Ben");
+
+    // Basit sekmede sadece Gün/Başlangıç/Bitiş var - mod ve gelismis
+    // bolumlerin hicbiri gorunmemeli.
+    expect(screen.queryByText("Esnek (Önerilen)")).not.toBeInTheDocument();
+    expect(screen.queryByText("Standart")).not.toBeInTheDocument();
+    expect(screen.queryByText("Randevu Süresi Modu")).not.toBeInTheDocument();
+    expect(screen.queryByText("Özel Günler")).not.toBeInTheDocument();
+    expect(screen.queryByText("Randevu Alma Süresi")).not.toBeInTheDocument();
+    // Ama temel alanlar hala var.
+    expect(screen.getByLabelText("Gün")).toBeInTheDocument();
+    expect(screen.getByLabelText("Başlangıç")).toBeInTheDocument();
+    expect(screen.getByLabelText("Bitiş")).toBeInTheDocument();
+  });
+
+  test("Gelişmiş Ayarlar'a geçince üç alt bölüm de (mod, özel günler, randevu alma süresi) görünür", async () => {
+    const user = userEvent.setup();
+    render(<AvailabilityPage />);
+    await screen.findByText("Ben");
+
+    await user.click(screen.getByRole("button", { name: "Gelişmiş Ayarlar" }));
+
+    expect(await screen.findByText("Randevu Süresi Modu")).toBeInTheDocument();
+    expect(screen.getByText("Özel Günler")).toBeInTheDocument();
+    expect(screen.getByText("Randevu Alma Süresi")).toBeInTheDocument();
+    // İki ModeFields örneği var (haftalık plan + özel günler formu).
+    expect(screen.getAllByText("Esnek (Önerilen)").length).toBe(2);
+  });
+
+  test("Basit sekmedeki formla oluşturulan kural her zaman esnek mod ile gönderilir", async () => {
+    const user = userEvent.setup();
+    const createRule = vi.spyOn(api, "createAvailabilityRule").mockResolvedValue({
+      id: 1,
+      tenant_id: 1,
+      staff_id: 1,
+      weekday: 0,
+      start_time: "09:00:00",
+      end_time: "18:00:00",
+      mode: "flexible",
+      slot_duration_minutes: null,
+      gap_minutes: 0,
+    });
+
+    render(<AvailabilityPage />);
+    await screen.findByText("Ben");
+
+    await user.type(screen.getByLabelText("Başlangıç"), "09:00");
+    await user.type(screen.getByLabelText("Bitiş"), "18:00");
+    await user.click(screen.getByRole("button", { name: "Ekle" }));
+
+    await waitFor(() =>
+      expect(createRule).toHaveBeenCalledWith({
+        staff_id: 1,
+        weekday: 0,
+        start_time: "09:00",
+        end_time: "18:00",
+        mode: "flexible",
+        slot_duration_minutes: null,
+        gap_minutes: 0,
+      }),
+    );
+  });
+
   test("standart mod seçilince süre/boşluk alanları görünür ve doğru gönderilir", async () => {
     const user = userEvent.setup();
     const createRule = vi.spyOn(api, "createAvailabilityRule").mockResolvedValue({
@@ -46,13 +111,15 @@ describe("AvailabilityPage", () => {
 
     render(<AvailabilityPage />);
     await screen.findByText("Ben");
+    await user.click(screen.getByRole("button", { name: "Gelişmiş Ayarlar" }));
+    await screen.findByText("Randevu Süresi Modu");
 
-    // Sayfada iki "Başlangıç"/"Bitiş" alanı var (haftalık plan + istisna) -
-    // ilk grup haftalık plan formuna ait.
+    // Gelismis sekmede iki "Başlangıç"/"Bitiş" alanı var (haftalık plan
+    // formu + özel günler formu) - ilk grup haftalık plan formuna ait.
     await user.type(screen.getAllByLabelText("Başlangıç")[0], "09:00");
     await user.type(screen.getAllByLabelText("Bitiş")[0], "12:00");
-    // İki mod seçici var (haftalık plan + istisna formu) - ilki bu teste ait.
-    await user.click(screen.getAllByText("Standart (sabit randevu izgarası)")[0]);
+    // İki mod seçici var (haftalık plan + özel günler formu) - ilki bu teste ait.
+    await user.click(screen.getAllByText("Standart")[0]);
 
     const durationInput = screen.getAllByLabelText("Randevu Süresi (dk)")[0];
     await user.clear(durationInput);
@@ -61,7 +128,7 @@ describe("AvailabilityPage", () => {
     await user.clear(gapInput);
     await user.type(gapInput, "10");
 
-    await user.click(screen.getByRole("button", { name: "Ekle" }));
+    await user.click(screen.getAllByRole("button", { name: "Ekle" })[0]);
 
     await waitFor(() =>
       expect(createRule).toHaveBeenCalledWith({
@@ -91,11 +158,12 @@ describe("AvailabilityPage", () => {
     });
 
     render(<AvailabilityPage />);
-    await screen.findByText("Tarihe Özel Değişiklik");
+    await screen.findByText("Ben");
+    await user.click(screen.getByRole("button", { name: "Gelişmiş Ayarlar" }));
+    await screen.findByText("Özel Günler");
 
     await user.type(screen.getByLabelText("Tarih"), "2026-11-02");
-    // Sayfada iki "Başlangıç"/"Bitiş" alanı var (haftalık plan + istisna) -
-    // ikinci grup istisna formuna ait.
+    // İkinci grup ("Başlangıç"/"Bitiş") özel gunler formuna ait.
     await user.type(screen.getAllByLabelText("Başlangıç")[1], "14:00");
     await user.type(screen.getAllByLabelText("Bitiş")[1], "16:00");
 
@@ -129,7 +197,9 @@ describe("AvailabilityPage", () => {
     });
 
     render(<AvailabilityPage />);
-    await screen.findByText("Tarihe Özel Değişiklik");
+    await screen.findByText("Ben");
+    await user.click(screen.getByRole("button", { name: "Gelişmiş Ayarlar" }));
+    await screen.findByText("Özel Günler");
 
     await user.type(screen.getByLabelText("Tarih"), "2026-11-02");
     await user.type(screen.getAllByLabelText("Başlangıç")[1], "14:00");
@@ -154,7 +224,9 @@ describe("AvailabilityPage", () => {
     });
 
     render(<AvailabilityPage />);
-    await screen.findByText("Randevu Açık Kalma Süresi");
+    await screen.findByText("Ben");
+    await user.click(screen.getByRole("button", { name: "Gelişmiş Ayarlar" }));
+    await screen.findByText("Randevu Alma Süresi");
 
     await user.click(screen.getByLabelText("Sınırsız"));
     const daysInput = await screen.findByRole("spinbutton");
@@ -165,7 +237,8 @@ describe("AvailabilityPage", () => {
     await waitFor(() => expect(updateSettings).toHaveBeenCalledWith(7));
   });
 
-  test("staff rolündeki kullanıcı randevu açık kalma süresi bölümünü görmez ve kendi planına kilitlenir", async () => {
+  test("staff rolündeki kullanıcı Gelişmiş Ayarlar'da randevu alma süresi bölümünü görmez ve kendi planına kilitlenir", async () => {
+    const user = userEvent.setup();
     vi.spyOn(api, "getMyTenant").mockResolvedValue({
       ...ownerTenant,
       my_role: "staff",
@@ -175,6 +248,9 @@ describe("AvailabilityPage", () => {
     render(<AvailabilityPage />);
     await screen.findByText("Kendi çalışma planınız");
 
-    expect(screen.queryByText("Randevu Açık Kalma Süresi")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Gelişmiş Ayarlar" }));
+    await screen.findByText("Özel Günler");
+
+    expect(screen.queryByText("Randevu Alma Süresi")).not.toBeInTheDocument();
   });
 });
